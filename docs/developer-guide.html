@@ -475,10 +475,16 @@
             <p>Scores the optimized plan across stochastic market and inflation paths.</p>
             <code>wealth_distribution</code>
             <code>confidence_score</code>
+            <code>confidence_band</code>
           </article>
           <article class="node" role="listitem">
-            <h3>generate_explanation</h3>
-            <p>Builds a client-facing explanation from the completed plan inputs.</p>
+            <h3>route_by_confidence_band</h3>
+            <p>Branches to the low, medium, or high confidence explanation route.</p>
+            <code>confidence_band</code>
+          </article>
+          <article class="node" role="listitem">
+            <h3>confidence explanation</h3>
+            <p>Builds a client-facing explanation with route-specific confidence guidance.</p>
             <code>explanation</code>
           </article>
           <article class="node" role="listitem">
@@ -493,6 +499,7 @@
           <div>profile added</div>
           <div>plan added</div>
           <div>risk view added</div>
+          <div>route selected</div>
           <div>final state</div>
         </div>
 
@@ -518,11 +525,20 @@
             <tr>
               <td><code>run_monte_carlo</code></td>
               <td><code>customer_profile</code>, <code>contribution_allocation</code>, <code>projected_wealth</code></td>
-              <td><code>wealth_distribution</code>, <code>confidence_score</code></td>
+              <td><code>wealth_distribution</code>, <code>confidence_score</code>, <code>confidence_band</code></td>
             </tr>
             <tr>
-              <td><code>generate_explanation</code></td>
-              <td><code>customer_profile</code>, <code>contribution_allocation</code>, <code>projected_wealth</code>, <code>wealth_distribution</code>, <code>confidence_score</code></td>
+              <td><code>route_by_confidence_band</code></td>
+              <td><code>confidence_band</code></td>
+              <td>
+                one of <code>generate_low_confidence_explanation</code>,
+                <code>generate_medium_confidence_explanation</code>, or
+                <code>generate_high_confidence_explanation</code>
+              </td>
+            </tr>
+            <tr>
+              <td>confidence-specific explanation node</td>
+              <td><code>customer_profile</code>, <code>contribution_allocation</code>, <code>projected_wealth</code>, <code>wealth_distribution</code>, <code>confidence_score</code>, <code>confidence_band</code></td>
               <td><code>explanation</code></td>
             </tr>
             <tr>
@@ -555,7 +571,14 @@
 
 def run_monte_carlo(state: RetirementPlanState) -> dict:
     paths = simulate(state["customer_profile"], state["contribution_allocation"])
-    return {"wealth_distribution": paths.distribution, "confidence_score": paths.confidence}</code></pre>
+    return {
+        "wealth_distribution": paths.distribution,
+        "confidence_score": paths.confidence,
+        "confidence_band": paths.confidence_band,
+    }
+
+def route_by_confidence_band(state: RetirementPlanState) -> str:
+    return state["confidence_band"]</code></pre>
 
         <div class="callout">
           <p>
@@ -570,7 +593,8 @@ def run_monte_carlo(state: RetirementPlanState) -> dict:
         <p>
           The core domain types live in <code>models.py</code>. <code>CustomerProfile</code> describes the customer's financial
           situation. <code>ContributionAllocation</code> holds the optimizer's annual recommendations before age 50 and
-          after age 50. <code>WealthDistribution</code> captures Monte Carlo percentiles, and <code>RetirementPlanResult</code>
+          after age 50. <code>WealthDistribution</code> captures Monte Carlo percentiles, <code>ConfidenceBand</code>
+          classifies the projection result for internal explanation policy, and <code>RetirementPlanResult</code>
           packages the final user-facing output.
         </p>
         <p>
@@ -601,7 +625,7 @@ def run_monte_carlo(state: RetirementPlanState) -> dict:
           <div class="panel">
             <h3>Monte Carlo API</h3>
             <p><strong>Receives:</strong> <code>customer_profile</code>, <code>contribution_allocation</code>, <code>projected_wealth</code></p>
-            <p><strong>Returns:</strong> <code>wealth_distribution</code>, <code>confidence_score</code></p>
+            <p><strong>Returns:</strong> <code>wealth_distribution</code>, <code>confidence_score</code>, <code>confidence_band</code></p>
             <p>
               Stochastic. Scores the LP's recommended plan across simulated market and inflation paths and
               reports the spread of possible outcomes.
@@ -613,8 +637,9 @@ def run_monte_carlo(state: RetirementPlanState) -> dict:
       <section id="llm-boundary">
         <h2>LLM Boundary</h2>
         <p>
-          The explanation node runs after both API calls complete. Its job is narration only — it should
-          not invent new allocations, modify confidence, or reinterpret the optimizer's objective.
+          The graph routes to a confidence-specific explanation node after both API calls complete. Its job
+          is narration only — it should not invent new allocations, modify confidence, or reinterpret the
+          optimizer's objective.
         </p>
 
         <table>
@@ -629,7 +654,7 @@ def run_monte_carlo(state: RetirementPlanState) -> dict:
               <td>Input (reads)</td>
               <td>
                 <code>customer_profile</code>, <code>contribution_allocation</code>, <code>projected_wealth</code>,
-                <code>wealth_distribution</code>, <code>confidence_score</code>
+                <code>wealth_distribution</code>, <code>confidence_score</code>, <code>confidence_band</code>
               </td>
             </tr>
             <tr>
@@ -641,8 +666,8 @@ def run_monte_carlo(state: RetirementPlanState) -> dict:
 
         <p style="margin-top: 20px;">
           Provider details belong behind <code>llm_gateway.py</code>. Graph wiring belongs in <code>main.py</code>.
-          The explanation node in <code>nodes/explanation.py</code> owns prompt construction — it formats the
-          five input keys into a prompt and calls the gateway.
+          The route-specific explanation functions in <code>nodes/explanation.py</code> own prompt construction —
+          they format the six input keys into a prompt, add confidence-specific guidance, and call the gateway.
         </p>
         <div class="callout">
           <p>

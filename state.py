@@ -1,6 +1,7 @@
 from typing import TypedDict
 from models import (
     CustomerProfile,
+    ConfidenceBand,
     ContributionAllocation,
     OptimizationDiagnostics,
     WealthDistribution,
@@ -15,5 +16,6 @@ class RetirementPlanState(TypedDict, total=False):
     projected_wealth: float
     wealth_distribution: WealthDistribution
     confidence_score: float
+    confidence_band: ConfidenceBand
     explanation: str
     result: RetirementPlanResult

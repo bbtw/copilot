@@ -8,6 +8,9 @@ def load_customer_profile(state: RetirementPlanState) -> dict:
         retirement_age=65,
         annual_income=120_000,
         annual_expenses=85_000,
+        retirement_annual_expenses=75_000,
+        retirement_years_to_plan=30,
+        expected_retirement_income=30_000,
         balances={
             "401k": 180_000,
             "roth_401k": 0,

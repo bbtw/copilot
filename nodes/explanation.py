@@ -8,12 +8,45 @@ SYSTEM = (
 )
 
 
-def generate_explanation(state: RetirementPlanState) -> dict:
+HIGH_CONFIDENCE_GUIDANCE = (
+    "Explain the allocation primarily as the optimizer's selected strategy. "
+    "Mention uncertainty briefly and emphasize the major drivers such as employer match, "
+    "HSA eligibility, tax treatment, and binding constraints."
+)
+
+MEDIUM_CONFIDENCE_GUIDANCE = (
+    "Explain the allocation and include a clear uncertainty paragraph. "
+    "Describe the projection as plausible but sensitive to market and inflation paths, "
+    "and say the client should revisit the plan periodically."
+)
+
+LOW_CONFIDENCE_GUIDANCE = (
+    "Do not present the plan as likely to meet the client's retirement goal. Explain the allocation, "
+    "state that simulated paths often exhaust assets before the planned retirement horizon, and suggest "
+    "review levers such as increasing savings capacity, changing retirement age, reducing expenses, "
+    "or advisor review. Avoid saying the allocation is bad; frame the issue as retirement-readiness risk."
+)
+
+
+def generate_low_confidence_explanation(state: RetirementPlanState) -> dict:
+    return _generate_explanation(state, LOW_CONFIDENCE_GUIDANCE)
+
+
+def generate_medium_confidence_explanation(state: RetirementPlanState) -> dict:
+    return _generate_explanation(state, MEDIUM_CONFIDENCE_GUIDANCE)
+
+
+def generate_high_confidence_explanation(state: RetirementPlanState) -> dict:
+    return _generate_explanation(state, HIGH_CONFIDENCE_GUIDANCE)
+
+
+def _generate_explanation(state: RetirementPlanState, confidence_guidance: str) -> dict:
     p = state["customer_profile"]
     alloc = state["contribution_allocation"]
     wealth = state["projected_wealth"]
     dist = state["wealth_distribution"]
     score = state["confidence_score"]
+    band = state["confidence_band"]
     diagnostics = state.get("optimization_diagnostics")
 
     pre50_lines = "\n".join(
@@ -67,6 +100,9 @@ Zero-selected variables with reduced-cost signals:
 Customer profile:
 - Age: {p.age}, retiring at {p.retirement_age}
 - Annual income: ${p.annual_income:,.0f}, annual expenses: ${p.annual_expenses:,.0f}
+- Retirement annual expenses: ${p.retirement_annual_expenses:,.0f}
+- Retirement years to plan: {p.retirement_years_to_plan}
+- Expected retirement income: ${p.expected_retirement_income:,.0f}/year
 - Savings capacity: ${p.savings_capacity:,.0f}/year
 - Employer match: {p.employer_match_rate:.0%} up to {p.employer_match_cap:.0%} of salary
 - HDHP enrolled: {p.hdhp_enrolled}
@@ -84,7 +120,8 @@ Monte Carlo percentiles (today's dollars):
   - 10th percentile: ${dist.p10:,.0f}
   - 50th percentile: ${dist.p50:,.0f}
   - 90th percentile: ${dist.p90:,.0f}
-Confidence score (probability of meeting projection): {score:.1%}
+Confidence score (probability of funding planned retirement years): {score:.1%}
+Internal confidence band: {band}
 
 Optimizer diagnostics:
 {optimizer_lines}
@@ -93,6 +130,8 @@ Please explain this retirement plan to the client in plain English.
 Use the optimizer diagnostics to explain why the model selected the major contribution choices.
 Do not imply guaranteed results. Describe the allocation as selected by the model under the stated assumptions.
 Balance benefits with the relevant constraints, assumptions, and uncertainty.
+Confidence-band guidance: {confidence_guidance}
+Do not present the raw internal confidence band as a customer-facing label.
 """.strip()
 
     explanation = complete(prompt, system=SYSTEM)

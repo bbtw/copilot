@@ -9,6 +9,8 @@ A LangGraph pipeline that optimizes a customer's retirement savings strategy for
 All inputs describing a customer's financial situation:
 - `age`, `retirement_age`
 - `annual_income`, `annual_expenses`
+- `retirement_annual_expenses`, `retirement_years_to_plan`
+- `expected_retirement_income` (v2; retirement income available outside portfolio withdrawals)
 - Current balances per `AccountType`
 - `employer_match_rate` (e.g., 0.50) and `employer_match_cap` (e.g., 0.06 of salary)
 - `hdhp_enrolled` (HSA eligibility)
@@ -46,25 +48,81 @@ The customer's total available dollars per year for retirement contributions (`a
 The objective being maximized: estimated **after-tax** portfolio value at retirement age. For each account, terminal balance = `existing_balance × (1+r)^years + pre50_contrib × FV_annuity(r, pre50_years) + post50_contrib × FV_annuity(r, post50_years)`, where `FV_annuity(r, n) = ((1+r)^n − 1) / r`. After-tax scaling: Roth 401k, Roth IRA, HSA contribute full value; Traditional 401k and IRA are scaled by `(1 − retirement_tax_rate)`; taxable brokerage uses a simplified haircut at `retirement_tax_rate` (principal + gains both scaled — a conservative approximation). The LP objective is the sum of after-tax terminal balances across all six account types.
 
 **MonteCarloProjection**
-A simulation of 1,000+ retirement paths run after the LP produces a `ContributionAllocation`. Varies market returns and inflation stochastically. Includes employer match dollars using the same combined 401(k) + Roth 401(k) cap as the LP. Returns a `WealthDistribution` reported in **today's dollars** (deflated by simulated inflation) and a `ConfidenceScore` computed against nominal terminal wealth.
+A simulation of 1,000+ retirement paths run after the LP produces a `ContributionAllocation`. Varies market returns and inflation stochastically. Includes employer match dollars using the same combined 401(k) + Roth 401(k) cap as the LP. Returns a `WealthDistribution` reported in **today's dollars** (deflated by simulated inflation), a `ConfidenceScore` that measures retirement readiness, and the derived `ConfidenceBand`.
 
 **Production Simulation**
 This repository simulates the shape of the production retirement planning pipeline. In production, the LP optimizer and Monte Carlo engine are separate black-box API calls. The only shared assumption is that both calls receive the same customer and plan input details needed for their calculations. They must not share calculation implementation code.
 
 **WealthDistribution**
 The spread of projected after-tax portfolio values at retirement across all Monte Carlo simulation paths (10th / 50th / 90th percentiles).
+_Avoid_: Using this outside the Monte Carlo processor to make plan-quality decisions or route workflow
+
+**RetirementOutcomeDistribution**
+A v2 Monte Carlo result that describes retirement-readiness outcomes across simulated paths as shortfall/surplus percentiles after funding `RetirementAnnualExpenses` for `RetirementYearsToPlan` years.
+Customer-facing output may show this distribution as secondary evidence for the `ConfidenceScore`, but graph routing and plan selection must not depend on its percentiles.
 
 **ConfidenceScore**
-The probability of the customer meeting the LP's nominal `ProjectedWealth` at retirement: `P(mc_nominal_terminal_wealth ≥ lp_projected_wealth)`. The LP's deterministic projection is the target — the MC score answers "how likely is the optimal plan to actually deliver its projected outcome?"
+The probability that the plan can fund `RetirementAnnualExpenses` for `RetirementYearsToPlan` years after the customer's retirement age without assets being exhausted before the end of the planned retirement horizon. The Monte Carlo processor owns this calculation and returns the score; it answers "how likely is this customer to have enough money to retire under the simulated paths?"
 
 **ConfidenceBand**
-A future explainability category derived from `ConfidenceScore`, such as low, medium, or high confidence. Exact thresholds and explanation behavior are unresolved.
+An internal explanation-routing category returned by `MonteCarloProjection` and derived from `ConfidenceScore`; canonical values are `low`, `medium`, and `high`. The band may shape graph routing and prompt strategy, but client-facing explanations should translate it into softer projection-risk language rather than presenting the raw band label as a plan quality judgment.
+_Avoid_: Customer-facing headline labels like "low confidence plan"
+
+Initial thresholds:
+- `low`: `ConfidenceScore < 70%`
+- `medium`: `70% ≤ ConfidenceScore < 85%`
+- `high`: `ConfidenceScore ≥ 85%`
+
+These thresholds are calibrated against retirement readiness: whether retirement income and assets cover `RetirementAnnualExpenses` for `RetirementYearsToPlan` years after the customer's retirement age.
+
+Explanation behavior:
+- `high`: Explain the allocation primarily as the optimizer's selected strategy, mention uncertainty briefly, and emphasize the major drivers such as employer match, HSA eligibility, tax treatment, and binding constraints.
+- `medium`: Explain the allocation and add a clear uncertainty paragraph: the plan may meet the retirement-readiness goal, but outcomes remain sensitive to market, inflation, and spending paths, so the customer should revisit the plan periodically.
+- `low`: Do not present the plan as likely to meet the customer's retirement goal. Explain the allocation, state that simulated paths often exhaust assets before the planned retirement horizon, and suggest review levers such as increasing savings capacity, changing retirement age, reducing expenses, or advisor review. Avoid saying the allocation is "bad"; the issue is retirement-readiness risk.
+
+**RetirementYearsToPlan**
+The number of retirement years the plan must fund after the customer's retirement age.
+_Avoid_: Using life expectancy or retirement end age as the canonical field name; either may inform the value, but the planning input is `RetirementYearsToPlan`
+
+**RetirementAnnualExpenses**
+The modeled annual spending need during retirement.
+_Avoid_: Treating current `annual_expenses` as the canonical retirement spending amount; it may be used as a default only when a retirement-specific amount is unavailable
+
+**ExpectedRetirementIncome**
+Customer profile data representing a single annual amount of expected retirement income available outside portfolio withdrawals, such as Social Security estimates, pension income, annuity payments, or other recurring retirement income.
+_Avoid_: Having the graph calculate Social Security benefits or pension values; modeling retirement income as a start/end-age stream in the first implementation
+
+**PlanRevisionIntake**
+A v2 low-confidence workflow step that presents model-informed candidate levers and asks the customer which future planning assumptions they are willing to change before running another optimization, limited to `retirement_age`, `RetirementAnnualExpenses`, `RetirementYearsToPlan`, and working-age expenses or savings targets that affect `SavingsCapacity`.
+_Avoid_: Free-form "fix my plan" chat; mutating historical/current facts such as current age, existing balances, filing status, HDHP enrollment, current income, or employer match; unilaterally setting revised assumptions without customer approval
+
+**RevisedPlanScenario**
+A customer-approved set of changed planning assumptions produced by `PlanRevisionIntake` and submitted as one coherent input for a subsequent optimization run.
+_Avoid_: Rerunning optimization after each individual intake answer
+
+**PlanRevisionPreferences**
+The accepted and declined planning levers captured during `PlanRevisionIntake`.
+_Avoid_: Recommending the same declined lever again in the revised-result explanation
+
+**RevisionAttemptLimit**
+The v2 rule that permits at most one automatic low-confidence `PlanRevisionIntake` and optimization rerun before presenting the best available result with next-step guidance.
+_Avoid_: Unbounded advisory loops inside the graph
+
+**BaselinePlanResult**
+The original optimization and Monte Carlo result produced before any low-confidence revision intake.
+
+**FinalPlanResult**
+The plan result presented as primary output; when a customer approves a `RevisedPlanScenario`, the revised result becomes primary and the baseline remains comparison context.
+
+**PlanResultComparison**
+A comparison between baseline and revised plan results that ranks improvement by `ConfidenceScore` first and treats `ProjectedWealth` as secondary context.
+_Avoid_: Treating higher projected wealth or `WealthDistribution` percentiles as better when retirement readiness worsens
 
 **PlanningHorizon**
-A fixed retirement age used as the endpoint of the accumulation phase in the Monte Carlo simulations. Decumulation phase (retirement spending, withdrawal sequencing, longevity) is not modeled in v1.
+A fixed retirement age used as the endpoint of the accumulation phase in the Monte Carlo simulations. The first readiness implementation models retirement survival for `RetirementYearsToPlan` years after this age.
 
 **RetirementPlanResult**
-The final pipeline output: `ContributionAllocation`, `ProjectedWealth`, `WealthDistribution`, `ConfidenceScore`, and a plain-English explanation generated by the LLM. Returned as a structured dict with a print helper for human-readable summary.
+The final pipeline output: `ContributionAllocation`, `ProjectedWealth`, `WealthDistribution`, `ConfidenceScore`, `ConfidenceBand`, and a plain-English explanation generated by the LLM. Returned as a structured dict with a print helper for human-readable summary.
 
 **RetirementPlanState**
 The accumulated LangGraph state passed through the retirement planning pipeline, containing each node's completed outputs.
@@ -78,7 +136,10 @@ run_lp_optimizer        ← maximizes after-tax ProjectedWealth; outputs Contrib
        ↓
 run_monte_carlo         ← outputs WealthDistribution (today's dollars) + ConfidenceScore
        ↓
-generate_explanation    ← LLM narrates the plan in plain English
+route_by_confidence_band
+       ↓
+generate_low_confidence_explanation | generate_medium_confidence_explanation | generate_high_confidence_explanation
+                         ← LLM narrates the plan in plain English
        ↓
 format_output           ← structured dict + human-readable summary
 ```
@@ -96,8 +157,8 @@ lang-graph-state/
 └── nodes/
     ├── load_profile.py      ← mocked CustomerProfile (42yo, $120k income, HDHP enrolled)
     ├── lp_optimizer.py      ← cvxpy LP; sets contribution_allocation + projected_wealth
-    ├── monte_carlo.py       ← 1,000-path simulation; sets wealth_distribution + confidence_score
-    ├── explanation.py       ← LLM call; sets explanation
+    ├── monte_carlo.py       ← 1,000-path simulation; sets wealth_distribution + confidence_score + confidence_band
+    ├── explanation.py       ← LLM call; sets explanation for confidence-specific routes
     └── format_output.py     ← assembles RetirementPlanResult
 ```
 
@@ -107,20 +168,22 @@ Each node is a plain function `(state: RetirementPlanState) -> dict`. The graph 
 |---|---|---|
 | `load_customer_profile` | initial empty state | `customer_profile` |
 | `run_lp_optimizer` | `customer_profile` | `contribution_allocation`, `projected_wealth` |
-| `run_monte_carlo` | `customer_profile`, `contribution_allocation`, `projected_wealth` | `wealth_distribution`, `confidence_score` |
-| `generate_explanation` | `customer_profile`, `contribution_allocation`, `projected_wealth`, `wealth_distribution`, `confidence_score` | `explanation` |
+| `run_monte_carlo` | `customer_profile`, `contribution_allocation`, `projected_wealth` | `wealth_distribution`, `confidence_score`, `confidence_band` |
+| `route_by_confidence_band` | `confidence_band` | one of `generate_low_confidence_explanation`, `generate_medium_confidence_explanation`, or `generate_high_confidence_explanation` |
+| confidence-specific explanation node | `customer_profile`, `contribution_allocation`, `projected_wealth`, `wealth_distribution`, `confidence_score`, `confidence_band` | `explanation` |
 | `format_output` | all prior outputs | `result` |
 
 ## Architecture Decisions
 
 - **LP → MC is sequential** (not iterative) in v1. The LP maximizes wealth deterministically; MC scores the resulting plan stochastically. Iterative feedback loop deferred to v2.
 - **LP and MC are production black boxes**. This repo may simulate both implementations locally, but production will call separate LP optimizer and Monte Carlo APIs. Keep the shared seam at the input details and result contracts; do not factor LP and MC calculation rules into shared implementation code.
+- **LP remains an accumulation optimizer in v2**. Even after `ConfidenceScore` becomes a retirement-readiness probability, the LP objective remains after-tax `ProjectedWealth`; Monte Carlo owns readiness scoring and decumulation-style survival analysis.
 - **LP is multi-year, two-phase**. Solves for two allocation vectors: pre-50 and post-50, reflecting the IRS catch-up contribution increase at age 50. Account balances compound across both phases; income, expenses, and tax rates are held fixed. Income growth and IRS limit indexing are deferred to v2. For customers already 50+, the pre-50 phase is skipped.
 - **Objective is after-tax wealth**, using `assumed_retirement_marginal_tax_rate` to scale pre-tax balances. Without this, the LP would always favor Traditional accounts (wrong answer).
 - **Asset allocation is fixed** — a single `ExpectedReturn` applied uniformly. Per-account differential returns deferred to v2.
 - **Employer match is modeled as a subsidy** in the objective (piecewise-linear `min`), not a constraint.
 - **Roth IRA phase-outs are input preprocessing**, not LP constraints — collapsed to fixed limits before the LP runs. Traditional IRA deductibility phase-outs are deferred.
-- **MC reports distribution percentiles in today's dollars** by deflating with simulated inflation. Confidence compares nominal MC terminal wealth to the nominal LP target.
+- **MC reports distribution percentiles in today's dollars** by deflating with simulated inflation. Confidence is returned by the Monte Carlo processor as the probability that retirement income and assets cover `RetirementAnnualExpenses` for `RetirementYearsToPlan` years after the customer's retirement age.
 - **LLM accessed through a thin gateway module** that abstracts model selection. Default: `claude-haiku-4-5`. Swappable without touching pipeline nodes.
 - **CustomerProfile is mocked** in v1. All data interfaces are designed to be replaced by real API calls without changing node signatures.
 - **LP solver: cvxpy**. Constraints are expressed as Python expressions that read like math (readable, auditable).
@@ -130,17 +193,18 @@ Each node is a plain function `(state: RetirementPlanState) -> dict`. The graph 
 
 - **Multi-year LP with income growth** — income, expenses, and IRS limits are held fixed; year-over-year changes to these are deferred to v2.
 - **Decumulation modeling** — withdrawal sequencing rules, retirement expenses, longevity uncertainty.
-- **"Probability of ruin"** — the v1 `ConfidenceScore` measures probability of hitting a wealth target, not surviving spending in retirement.
-- **Social Security** — excluded; can be incorporated later as a deterministic income stream during decumulation.
+- **Locally implemented probability-of-ruin logic** — `ConfidenceScore` is a retirement-readiness result returned by the Monte Carlo processor; the graph should consume it rather than reimplementing the decumulation calculation locally.
+- **Incremental low-confidence reruns** — v2 `PlanRevisionIntake` produces a complete **RevisedPlanScenario** before rerunning optimization; the graph should not rerun after each individual intake answer.
+- **Repeated low-confidence reruns** — v2 uses a **RevisionAttemptLimit** of one automatic revision attempt; further low-confidence outcomes stop with the best available result and next-step guidance.
+- **Social Security benefit calculation** — excluded; expected Social Security income may be supplied as part of `ExpectedRetirementIncome`, but the graph does not estimate benefits.
 - **Per-account differential returns** — single `ExpectedReturn` applied uniformly.
 - **Asset allocation as a decision variable** — fixed glide path / single return assumption.
 - **Strategic Roth conversions, backdoor Roth, mega backdoor Roth** — out of scope.
 - **State income tax** — only federal marginal rates are modeled.
 - **Conversational input gathering** — v1 takes a fully-populated `CustomerProfile`; v2 adds the LLM-driven conversation loop.
 - **Service-layer node refactor** — v1 nodes contain implementation logic directly; v2 should make nodes thin orchestration wrappers around services for optimization, simulation, profile loading, and explanation generation.
-- **Confidence-based explanation routing** — v2 should route explanation generation based on the projection outcome. Low, medium, and high confidence plans likely need different explanation strategies, but the thresholds and behaviors are not yet defined.
+- **Interactive low-confidence revision workflow** — deferred; the first readiness implementation updates Monte Carlo scoring and explanation routing, but does not yet implement `PlanRevisionIntake`, `RevisedPlanScenario`, or comparison output.
 
 ## Flagged Ambiguities
 
-- **ConfidenceBand thresholds** — low, medium, and high confidence are useful explainability categories, but the project has not decided the numerical `ConfidenceScore` ranges for each band.
-- **ConfidenceBand behavior** — the explanation should treat low, medium, and high confidence outcomes differently, but the project has not decided whether that means different prompts, different graph routes, different disclosures, recommendations to re-optimize, or escalation to a human advisor.
+- **Low-confidence workflow escalation** — resolved for v2 as **PlanRevisionIntake** followed by another optimization attempt when the customer changes adjustable planning levers; advisor escalation and required disclosure generation remain separate unresolved workflows.

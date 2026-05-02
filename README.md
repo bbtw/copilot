@@ -6,7 +6,7 @@ A LangGraph pipeline that optimizes a customer's retirement savings strategy. Gi
 
 1. **Loads a customer profile** — age, income, expenses, existing balances, employer match, tax rates
 2. **Runs a cvxpy LP optimizer** — finds the optimal annual contribution allocation across six account types, in two phases (pre-50 and post-50 401k/IRA catch-up)
-3. **Runs a Monte Carlo simulation** — 1,000 paths varying market returns and inflation; reports percentiles in today's dollars
+3. **Runs a Monte Carlo simulation** — 1,000 paths varying market returns and inflation; reports percentiles in today's dollars and scores retirement readiness
 4. **Generates a plain-English explanation** — via Claude (claude-haiku-4-5)
 5. **Formats and prints the result** — allocation, projected wealth, percentile distribution, confidence score
 
@@ -106,6 +106,7 @@ contribution_allocation
 projected_wealth
 wealth_distribution
 confidence_score
+confidence_band
 explanation
 result
 ```
@@ -118,8 +119,9 @@ The v1 state sequence is:
 |---|---|---|
 | `load_customer_profile` | initial empty state | `customer_profile` |
 | `run_lp_optimizer` | `customer_profile` | `contribution_allocation`, `projected_wealth` |
-| `run_monte_carlo` | `customer_profile`, `contribution_allocation`, `projected_wealth` | `wealth_distribution`, `confidence_score` |
-| `generate_explanation` | `customer_profile`, `contribution_allocation`, `projected_wealth`, `wealth_distribution`, `confidence_score` | `explanation` |
+| `run_monte_carlo` | `customer_profile`, `contribution_allocation`, `projected_wealth` | `wealth_distribution`, `confidence_score`, `confidence_band` |
+| `route_by_confidence_band` | `confidence_band` | low, medium, or high explanation route |
+| confidence-specific explanation node | `customer_profile`, `contribution_allocation`, `projected_wealth`, `wealth_distribution`, `confidence_score`, `confidence_band` | `explanation` |
 | `format_output` | all prior outputs | `result` |
 
 Nodes do not mutate the state object in place. The contract is: read required keys from the incoming state, return a small dict with newly produced keys, and let LangGraph assemble the final state.
@@ -130,7 +132,8 @@ Nodes do not mutate the state object in place. The contract is: read required ke
 - **Multi-year compounding** — LP objective is after-tax terminal wealth compounded to retirement; income and limits held fixed (v1 approximation)
 - **Combined employer match cap** — match ceiling applies to 401k + Roth 401k combined, matching real-world plan rules
 - **After-tax objective** — pre-tax accounts scaled by `(1 − retirement_tax_rate)` so the optimizer correctly favors Roth accounts when current rates exceed retirement rates
-- **MC percentiles in today's dollars** — terminal wealth deflated by simulated inflation for interpretable percentiles; confidence compares nominal MC wealth to the nominal LP target
+- **MC percentiles in today's dollars** — terminal wealth deflated by simulated inflation for interpretable percentiles; confidence measures whether assets can fund planned retirement expenses after expected retirement income
+- **Confidence-based routing** — the graph branches after Monte Carlo by `confidence_band`; route-specific explanation functions use distinct guidance while sharing common prompt assembly
 
 See `CONTEXT.md` for the full domain glossary and architecture decisions.
 
@@ -141,7 +144,7 @@ For a deeper walkthrough of the graph, state flow, and development boundaries, o
 
 - Multi-year LP with income growth and IRS limit indexing
 - Decumulation modeling (withdrawal sequencing, longevity)
-- Social Security income
+- Social Security benefit calculation; expected retirement income is supplied as customer profile data
 - Per-account differential returns
 - Roth conversions, backdoor Roth
 - State income tax

@@ -10,6 +10,7 @@ ACCOUNT_TYPES: list[AccountType] = [
 ]
 
 FilingStatus = Literal["single", "married_filing_jointly", "married_filing_separately", "head_of_household"]
+ConfidenceBand = Literal["low", "medium", "high"]
 
 
 @dataclass
@@ -18,6 +19,9 @@ class CustomerProfile:
     retirement_age: int
     annual_income: float
     annual_expenses: float
+    retirement_annual_expenses: float
+    retirement_years_to_plan: int
+    expected_retirement_income: float
     balances: dict[str, float]
     employer_match_rate: float
     employer_match_cap: float
@@ -95,6 +99,7 @@ class RetirementPlanResult:
     projected_wealth: float
     wealth_distribution: WealthDistribution
     confidence_score: float
+    confidence_band: ConfidenceBand
     explanation: str
     optimization_diagnostics: OptimizationDiagnostics | None = None
 
@@ -116,6 +121,7 @@ class RetirementPlanResult:
         print(f"  50th percentile: ${self.wealth_distribution.p50:>12,.0f}")
         print(f"  90th percentile: ${self.wealth_distribution.p90:>12,.0f}")
         print(f"  Confidence score: {self.confidence_score:.1%}")
+        print(f"  Confidence band: {self.confidence_band}")
         if self.optimization_diagnostics:
             binding = [c for c in self.optimization_diagnostics.constraints if c.binding]
             print("\nBinding Optimizer Constraints:")

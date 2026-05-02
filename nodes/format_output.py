@@ -8,6 +8,7 @@ def format_output(state: RetirementPlanState) -> dict:
         projected_wealth=state["projected_wealth"],
         wealth_distribution=state["wealth_distribution"],
         confidence_score=state["confidence_score"],
+        confidence_band=state["confidence_band"],
         explanation=state["explanation"],
         optimization_diagnostics=state.get("optimization_diagnostics"),
     )
