@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock
+
 from models import (
     ACCOUNT_TYPES,
     ContributionAllocation,
@@ -9,19 +11,13 @@ from models import (
     WealthDistribution,
 )
 from services.explanation import ExplanationService
+from services.llm import GatewayClient
 
 
-class FakeLLM:
-    def __init__(self) -> None:
-        self.prompt = ""
-        self.system = ""
-        self.max_tokens = None
-
-    def complete(self, prompt: str, *, system: str = "", max_tokens: int = 1024) -> str:
-        self.prompt = prompt
-        self.system = system
-        self.max_tokens = max_tokens
-        return "service explanation"
+def _mock_gateway(response: str = "service explanation") -> MagicMock:
+    mock = MagicMock(spec=GatewayClient)
+    mock.complete.return_value = response
+    return mock
 
 
 def _request(confidence_band: str = "low", diagnostics=None) -> PlanExplanationRequest:
@@ -54,17 +50,18 @@ def _request(confidence_band: str = "low", diagnostics=None) -> PlanExplanationR
     )
 
 
-def test_generate_uses_injected_llm_and_confidence_guidance():
-    fake_llm = FakeLLM()
-    service = ExplanationService(llm=fake_llm)
+def test_generate_uses_injected_gateway_and_confidence_guidance():
+    gateway = _mock_gateway()
+    service = ExplanationService(llm=gateway)
 
     result = service.generate(_request("low"))
 
+    prompt, kwargs = gateway.complete.call_args.args[0], gateway.complete.call_args.kwargs
     assert result == "service explanation"
-    assert "certified financial planner" in fake_llm.system
-    assert "Do not present the plan as likely to meet the client's retirement goal" in fake_llm.prompt
-    assert "Internal confidence band: low" in fake_llm.prompt
-    assert "hsa: $4,150/year" in fake_llm.prompt
+    assert "certified financial planner" in kwargs["system"]
+    assert "Do not present the plan as likely to meet the client's retirement goal" in prompt
+    assert "Internal confidence band: low" in prompt
+    assert "hsa: $4,150/year" in prompt
 
 
 def test_generate_formats_optimizer_diagnostics_as_explainability_input():
@@ -103,13 +100,14 @@ def test_generate_formats_optimizer_diagnostics_as_explainability_input():
             ),
         ],
     )
-    fake_llm = FakeLLM()
-    service = ExplanationService(llm=fake_llm)
+    gateway = _mock_gateway()
+    service = ExplanationService(llm=gateway)
 
     service.generate(_request("high", diagnostics=diagnostics))
 
-    assert "Solver: CLARABEL" in fake_llm.prompt
-    assert "pre50_hsa: $4,150/year" in fake_llm.prompt
-    assert "pre50_savings_capacity: slack $0.00, shadow price 1.25" in fake_llm.prompt
-    assert "pre50_roth_ira: reduced-cost signal 0.42" in fake_llm.prompt
-    assert "Explain the allocation primarily as the optimizer's selected strategy" in fake_llm.prompt
+    prompt = gateway.complete.call_args.args[0]
+    assert "Solver: CLARABEL" in prompt
+    assert "pre50_hsa: $4,150/year" in prompt
+    assert "pre50_savings_capacity: slack $0.00, shadow price 1.25" in prompt
+    assert "pre50_roth_ira: reduced-cost signal 0.42" in prompt
+    assert "Explain the allocation primarily as the optimizer's selected strategy" in prompt

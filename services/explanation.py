@@ -1,5 +1,5 @@
 from models import ConfidenceBand, OptimizationDiagnostics, PlanExplanationRequest
-from services.llm import AnthropicLLMClient, LLMClient
+from services.llm import GatewayClient
 
 SYSTEM = (
     "You are a certified financial planner explaining a retirement savings plan to a client. "
@@ -35,8 +35,8 @@ CONFIDENCE_GUIDANCE: dict[ConfidenceBand, str] = {
 
 
 class ExplanationService:
-    def __init__(self, llm: LLMClient | None = None) -> None:
-        self._llm = llm or AnthropicLLMClient()
+    def __init__(self, llm: GatewayClient | None = None) -> None:
+        self._llm = llm or GatewayClient()
 
     def generate(self, request: PlanExplanationRequest) -> str:
         # Prompt construction stays here so provider clients remain unaware of

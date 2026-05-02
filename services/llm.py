@@ -1,30 +1,26 @@
-from typing import Protocol
+import os
 
-import anthropic
-
-DEFAULT_MODEL = "claude-haiku-4-5"
+from openai import OpenAI
 
 
-class LLMClient(Protocol):
-    # Structural interface: any production client or test fake with this
-    # method can be injected into services without inheritance.
-    def complete(self, prompt: str, *, system: str = "", max_tokens: int = 1024) -> str:
-        ...
-
-
-class AnthropicLLMClient:
-    def __init__(self, model: str = DEFAULT_MODEL) -> None:
-        self._client = anthropic.Anthropic()
-        self._model = model
-
-    def complete(self, prompt: str, *, system: str = "", max_tokens: int = 1024) -> str:
-        # Provider-specific API shape is isolated here; services only depend on
-        # the LLMClient protocol's prompt-completion capability.
-        messages = [{"role": "user", "content": prompt}]
-        response = self._client.messages.create(
-            model=self._model,
-            max_tokens=max_tokens,
-            system=system,
-            messages=messages,
+class GatewayClient:
+    def __init__(self) -> None:
+        self._client = OpenAI(
+            base_url=os.environ["LLM_GATEWAY_BASE_URL"],
+            api_key=os.environ.get("LLM_GATEWAY_API_KEY", "ollama"),
         )
-        return response.content[0].text
+        self._model_provider = os.environ.get("LLM_MODEL_PROVIDER", "")
+        self._model_id = os.environ["LLM_MODEL_ID"]
+
+    def complete(self, prompt: str, *, system: str = "", max_tokens: int = 1024) -> str:
+        extra = {"model_provider": self._model_provider} if self._model_provider else {}
+        response = self._client.chat.completions.create(
+            model=self._model_id,
+            max_tokens=max_tokens,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ],
+            extra_body=extra,
+        )
+        return response.choices[0].message.content

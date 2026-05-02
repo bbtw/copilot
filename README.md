@@ -27,10 +27,12 @@ A LangGraph pipeline that optimizes a customer's retirement savings strategy. Gi
 uv sync
 ```
 
-Set your Anthropic API key:
+Set environment variables (copy `.env.example` and adjust):
 
 ```bash
-export ANTHROPIC_API_KEY=your_key_here
+export LLM_GATEWAY_BASE_URL=http://localhost:11434/v1  # Ollama for local dev
+export LLM_MODEL_ID=llama3.2
+# Production: point at the enterprise gateway URL and set LLM_MODEL_PROVIDER
 ```
 
 ## Run
@@ -136,6 +138,7 @@ Nodes do not mutate the state object in place. The contract is: read required ke
 - **After-tax objective** — pre-tax accounts scaled by `(1 − retirement_tax_rate)` so the optimizer correctly favors Roth accounts when current rates exceed retirement rates
 - **MC percentiles in today's dollars** — terminal wealth deflated by simulated inflation for interpretable percentiles; confidence measures whether assets can fund planned retirement expenses after expected retirement income
 - **Confidence-based routing** — the graph branches after Monte Carlo by `confidence_band`; route-specific explanation functions use distinct guidance while sharing common prompt assembly
+- **Injectable GatewayClient** — `ExplanationService` accepts a `GatewayClient` from `services/llm.py`; tests mock it at the call site using `MagicMock(spec=GatewayClient)`
 
 See `CONTEXT.md` for the full domain glossary and architecture decisions.
 
