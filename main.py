@@ -3,27 +3,36 @@ from state import RetirementPlanState
 from nodes.load_profile import load_customer_profile
 from nodes.lp_optimizer import run_lp_optimizer
 from nodes.monte_carlo import run_monte_carlo
-from nodes.explanation import (
-    generate_high_confidence_explanation,
-    generate_low_confidence_explanation,
-    generate_medium_confidence_explanation,
-)
+from nodes.explanation import build_explanation_node
 from nodes.format_output import format_output
+from services.explanation import ExplanationService
 
 
 def route_by_confidence_band(state: RetirementPlanState) -> str:
     return state["confidence_band"]
 
 
-def build_graph() -> StateGraph:
+def build_graph(
+    explanation_service: ExplanationService | None = None,
+) -> StateGraph:
+    explanation_service = explanation_service or ExplanationService()
     graph = StateGraph(RetirementPlanState)
 
     graph.add_node("load_customer_profile", load_customer_profile)
     graph.add_node("run_lp_optimizer", run_lp_optimizer)
     graph.add_node("run_monte_carlo", run_monte_carlo)
-    graph.add_node("generate_low_confidence_explanation", generate_low_confidence_explanation)
-    graph.add_node("generate_medium_confidence_explanation", generate_medium_confidence_explanation)
-    graph.add_node("generate_high_confidence_explanation", generate_high_confidence_explanation)
+    graph.add_node(
+        "generate_low_confidence_explanation",
+        build_explanation_node("low", explanation_service),
+    )
+    graph.add_node(
+        "generate_medium_confidence_explanation",
+        build_explanation_node("medium", explanation_service),
+    )
+    graph.add_node(
+        "generate_high_confidence_explanation",
+        build_explanation_node("high", explanation_service),
+    )
     graph.add_node("format_output", format_output)
 
     graph.add_edge(START, "load_customer_profile")

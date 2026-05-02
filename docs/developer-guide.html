@@ -665,7 +665,7 @@ def route_by_confidence_band(state: RetirementPlanState) -> str:
         </table>
 
         <p style="margin-top: 20px;">
-          Provider details belong behind <code>llm_gateway.py</code>. Graph wiring belongs in <code>main.py</code>.
+          Provider details belong behind <code>services/llm.py</code>. Graph wiring belongs in <code>main.py</code>.
           The route-specific explanation functions in <code>nodes/explanation.py</code> own prompt construction —
           they format the six input keys into a prompt, add confidence-specific guidance, and call the gateway.
         </p>

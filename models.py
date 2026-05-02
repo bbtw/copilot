@@ -94,6 +94,19 @@ class OptimizationDiagnostics:
 
 
 @dataclass
+class PlanExplanationRequest:
+    """Result contract consumed by the explanation service, independent of LangGraph state."""
+
+    customer_profile: CustomerProfile
+    contribution_allocation: ContributionAllocation
+    projected_wealth: float
+    wealth_distribution: WealthDistribution
+    confidence_score: float
+    confidence_band: ConfidenceBand
+    optimization_diagnostics: OptimizationDiagnostics | None = None
+
+
+@dataclass
 class RetirementPlanResult:
     contribution_allocation: ContributionAllocation
     projected_wealth: float

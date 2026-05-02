@@ -7,6 +7,15 @@ from models import (
 from nodes import explanation
 
 
+class FakeExplanationService:
+    def __init__(self) -> None:
+        self.request = None
+
+    def generate(self, request):
+        self.request = request
+        return "explanation"
+
+
 def _state(confidence_band: str) -> dict:
     return {
         "customer_profile": CustomerProfile(
@@ -36,31 +45,25 @@ def _state(confidence_band: str) -> dict:
     }
 
 
-def test_low_confidence_route_uses_low_confidence_guidance(monkeypatch):
-    captured = {}
+def test_build_explanation_node_adapts_state_to_service_request():
+    service = FakeExplanationService()
+    node = explanation.build_explanation_node("low", service)
 
-    def fake_complete(prompt: str, system: str = "") -> str:
-        captured["prompt"] = prompt
-        return "explanation"
-
-    monkeypatch.setattr(explanation, "complete", fake_complete)
-
-    result = explanation.generate_low_confidence_explanation(_state("low"))
+    result = node(_state("low"))
 
     assert result == {"explanation": "explanation"}
-    assert "Do not present the plan as likely to meet the client's retirement goal" in captured["prompt"]
+    assert service.request.confidence_band == "low"
+    assert service.request.projected_wealth == 1_000_000
+    assert service.request.customer_profile.age == 42
 
 
-def test_high_confidence_route_uses_high_confidence_guidance(monkeypatch):
-    captured = {}
+def test_explanation_route_mismatch_fails_fast():
+    service = FakeExplanationService()
+    node = explanation.build_explanation_node("low", service)
 
-    def fake_complete(prompt: str, system: str = "") -> str:
-        captured["prompt"] = prompt
-        return "explanation"
-
-    monkeypatch.setattr(explanation, "complete", fake_complete)
-
-    result = explanation.generate_high_confidence_explanation(_state("high"))
-
-    assert result == {"explanation": "explanation"}
-    assert "Explain the allocation primarily as the optimizer's selected strategy" in captured["prompt"]
+    try:
+        node(_state("high"))
+    except ValueError as exc:
+        assert "Explanation route mismatch" in str(exc)
+    else:
+        raise AssertionError("Expected route mismatch to raise ValueError")

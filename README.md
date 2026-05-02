@@ -87,7 +87,9 @@ The current test suite covers the LP optimizer constraints and Monte Carlo proje
 ├── main.py              ← builds and runs the graph
 ├── state.py             ← RetirementPlanState TypedDict
 ├── models.py            ← data classes
-├── llm_gateway.py       ← thin Claude abstraction
+├── services/
+│   ├── explanation.py   ← explanation prompt assembly and LLM orchestration
+│   └── llm.py           ← LLM client protocol and Anthropic adapter
 └── nodes/
     ├── load_profile.py  ← mocked CustomerProfile
     ├── lp_optimizer.py   ← cvxpy LP (two-phase, multi-year)
@@ -149,5 +151,5 @@ For a deeper walkthrough of the graph, state flow, and development boundaries, o
 - Roth conversions, backdoor Roth
 - State income tax
 - Conversational input gathering (LLM-driven profile collection)
-- Refactor graph nodes into orchestration wrappers that call service-layer implementations, so optimization, simulation, profile loading, and explanation logic do not live directly in node functions
+- Continue the service-layer node refactor for optimization, simulation, profile loading, and formatting. Explanation already uses the target node-wrapper/service shape.
 - Confidence-based explanation routing: low, medium, and high confidence projection outcomes should eventually receive different explanation treatment, but thresholds and behaviors are still unresolved
