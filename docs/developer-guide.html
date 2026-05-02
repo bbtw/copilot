@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Retirement Plan Optimizer Developer Guide</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17211b;
+      --muted: #5d6861;
+      --line: #d7ded8;
+      --surface: #ffffff;
+      --band: #f5f7f4;
+      --accent: #0b6b57;
+      --accent-strong: #064d40;
+      --gold: #b6842c;
+      --blue: #315f8f;
+      --rose: #9d4d5f;
+      --code: #eef3ef;
+      --shadow: 0 18px 45px rgba(23, 33, 27, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--surface);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    a {
+      color: var(--accent-strong);
+      text-decoration-color: rgba(11, 107, 87, 0.35);
+      text-underline-offset: 3px;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    nav {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 32px 24px;
+      border-right: 1px solid var(--line);
+      background: #fbfcfb;
+      overflow-y: auto;
+    }
+
+    nav .label {
+      margin: 0 0 20px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    nav a {
+      display: block;
+      padding: 8px 0;
+      color: var(--ink);
+      font-size: 14px;
+      text-decoration: none;
+    }
+
+    nav a:hover {
+      color: var(--accent-strong);
+    }
+
+    main {
+      min-width: 0;
+    }
+
+    header {
+      padding: 72px clamp(24px, 6vw, 92px) 56px;
+      border-bottom: 1px solid var(--line);
+      background:
+        linear-gradient(135deg, rgba(11, 107, 87, 0.10), transparent 42%),
+        linear-gradient(180deg, #ffffff, #f7faf7);
+    }
+
+    .eyebrow {
+      margin: 0 0 14px;
+      color: var(--accent-strong);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 920px;
+      margin: 0;
+      font-size: 72px;
+      line-height: 0.98;
+      letter-spacing: 0;
+    }
+
+    .lede {
+      max-width: 790px;
+      margin: 24px 0 0;
+      color: var(--muted);
+      font-size: 20px;
+      line-height: 1.45;
+    }
+
+    section {
+      padding: 56px clamp(24px, 6vw, 92px);
+      border-bottom: 1px solid var(--line);
+    }
+
+    section.band {
+      background: var(--band);
+    }
+
+    h2 {
+      margin: 0 0 16px;
+      font-size: 40px;
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 32px 0 10px;
+      font-size: 21px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    p {
+      max-width: 860px;
+      margin: 0 0 16px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .grid {
+      display: grid;
+      gap: 18px;
+    }
+
+    .grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .panel {
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .panel h3 {
+      margin-top: 0;
+    }
+
+    .stat {
+      display: grid;
+      gap: 8px;
+      align-content: start;
+      min-height: 150px;
+    }
+
+    .stat strong {
+      color: var(--accent-strong);
+      font-size: 34px;
+      line-height: 1;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(150px, 1fr));
+      gap: 14px;
+      margin-top: 28px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+
+    .node {
+      position: relative;
+      min-height: 170px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-top: 5px solid var(--accent);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .node:nth-child(2) {
+      border-top-color: var(--blue);
+    }
+
+    .node:nth-child(3) {
+      border-top-color: var(--gold);
+    }
+
+    .node:nth-child(4) {
+      border-top-color: var(--rose);
+    }
+
+    .node:nth-child(5) {
+      border-top-color: var(--accent-strong);
+    }
+
+    .node h3 {
+      margin: 0 0 10px;
+      font-size: 17px;
+    }
+
+    .node p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .node code {
+      display: inline-block;
+      margin-top: 12px;
+    }
+
+    .arrow-row {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(150px, 1fr));
+      gap: 14px;
+      margin-top: 8px;
+      overflow-x: auto;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .arrow-row div:not(:last-child)::after {
+      content: "→";
+      float: right;
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 22px;
+      font-size: 15px;
+    }
+
+    th,
+    td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      background: #fafbfa;
+    }
+
+    code,
+    pre {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 5px;
+      background: var(--code);
+      font-size: 0.92em;
+    }
+
+    pre {
+      margin: 18px 0 0;
+      padding: 20px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #111a16;
+      color: #ecf5ef;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    pre code {
+      padding: 0;
+      border-radius: 0;
+      background: transparent;
+      font-size: inherit;
+    }
+
+    .callout {
+      margin-top: 20px;
+      padding: 18px 20px;
+      border-left: 4px solid var(--accent);
+      background: #eef7f3;
+    }
+
+    .callout p:last-child,
+    .panel p:last-child {
+      margin-bottom: 0;
+    }
+
+    .sequence {
+      display: grid;
+      gap: 12px;
+      margin-top: 24px;
+      max-width: 920px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 48px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .step span {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: white;
+      font-weight: 800;
+    }
+
+    footer {
+      padding: 34px clamp(24px, 6vw, 92px);
+      color: var(--muted);
+      background: #fbfcfb;
+    }
+
+    @media (max-width: 980px) {
+      .shell {
+        display: block;
+      }
+
+      nav {
+        position: static;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .grid.two,
+      .grid.three {
+        grid-template-columns: 1fr;
+      }
+
+      .flow,
+      .arrow-row {
+        grid-template-columns: repeat(5, 190px);
+      }
+
+      h1 {
+        font-size: 44px;
+      }
+
+      h2 {
+        font-size: 30px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav aria-label="Guide sections">
+      <p class="label">Developer Guide</p>
+      <a href="#orientation">Orientation</a>
+      <a href="#mental-model">Mental Model</a>
+      <a href="#state-flow">State Flow</a>
+      <a href="#node-contract">Node Contract</a>
+      <a href="#domain-model">Domain Model</a>
+      <a href="#calculation-boundaries">API Boundaries</a>
+      <a href="#llm-boundary">LLM Boundary</a>
+      <a href="#working-rules">Working Rules</a>
+    </nav>
+
+    <main>
+      <header>
+        <p class="eyebrow">Retirement Plan Optimizer</p>
+        <h1>A teaching guide for developers joining the system.</h1>
+        <p class="lede">
+          This guide explains how the LangGraph app passes state through the retirement planning pipeline,
+          where domain decisions live, and how to make changes without blurring orchestration, optimization,
+          simulation, and explanation responsibilities.
+        </p>
+      </header>
+
+      <section id="orientation">
+        <h2>Orientation</h2>
+        <p>
+          The app is a compact simulation of a production retirement planning workflow. It starts with a
+          fully populated customer profile, computes an optimized contribution plan, scores that plan with a
+          Monte Carlo projection, asks an LLM to explain the outcome, and formats the result for display.
+        </p>
+        <p>
+          Treat the repository as two things at once: a runnable LangGraph example and a domain model for
+          after-tax retirement contribution planning. The code is intentionally small, but the boundaries
+          matter because future versions are expected to replace local implementations with production APIs.
+        </p>
+
+        <div class="grid three">
+          <div class="panel stat">
+            <strong>5</strong>
+            <p>Graph nodes run in a fixed sequence from profile loading to final result formatting.</p>
+          </div>
+          <div class="panel stat">
+            <strong>7</strong>
+            <p>State keys are accumulated in <code>RetirementPlanState</code> as each node completes its work.</p>
+          </div>
+          <div class="panel stat">
+            <strong>2</strong>
+            <p>The LP and Monte Carlo engines are deliberately separate calculation boundaries.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="mental-model" class="band">
+        <h2>Mental Model</h2>
+        <p>
+          LangGraph is the orchestration layer. It decides which node runs next and carries state between
+          nodes. The nodes are plain Python functions. A node reads the accumulated state, performs one
+          responsibility, and returns a small dictionary containing the new values it produced.
+        </p>
+        <div class="callout">
+          <p>
+            The key idea: state is not a shared object that nodes mutate in place. State is an accumulated
+            record assembled from each node's returned partial dictionary.
+          </p>
+        </div>
+      </section>
+
+      <section id="state-flow">
+        <h2>State Flow</h2>
+        <p>
+          <code>main.py</code> builds a <code>StateGraph(RetirementPlanState)</code> and invokes it with an empty dictionary.
+          From there, each node adds the next piece of the plan. The final state contains both intermediate
+          values and the assembled <code>RetirementPlanResult</code>.
+        </p>
+
+        <div class="flow" role="list" aria-label="LangGraph state flow">
+          <article class="node" role="listitem">
+            <h3>load_customer_profile</h3>
+            <p>Creates the mocked customer inputs used by the rest of the pipeline.</p>
+            <code>customer_profile</code>
+          </article>
+          <article class="node" role="listitem">
+            <h3>run_lp_optimizer</h3>
+            <p>Solves the deterministic after-tax contribution allocation problem.</p>
+            <code>contribution_allocation</code>
+            <code>projected_wealth</code>
+          </article>
+          <article class="node" role="listitem">
+            <h3>run_monte_carlo</h3>
+            <p>Scores the optimized plan across stochastic market and inflation paths.</p>
+            <code>wealth_distribution</code>
+            <code>confidence_score</code>
+          </article>
+          <article class="node" role="listitem">
+            <h3>generate_explanation</h3>
+            <p>Builds a client-facing explanation from the completed plan inputs.</p>
+            <code>explanation</code>
+          </article>
+          <article class="node" role="listitem">
+            <h3>format_output</h3>
+            <p>Assembles a structured result object and print-friendly summary.</p>
+            <code>result</code>
+          </article>
+        </div>
+
+        <div class="arrow-row" aria-hidden="true">
+          <div>initial <code>{}</code></div>
+          <div>profile added</div>
+          <div>plan added</div>
+          <div>risk view added</div>
+          <div>final state</div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Node</th>
+              <th>Reads</th>
+              <th>Returns</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>load_customer_profile</code></td>
+              <td>Initial empty state</td>
+              <td><code>customer_profile</code></td>
+            </tr>
+            <tr>
+              <td><code>run_lp_optimizer</code></td>
+              <td><code>customer_profile</code></td>
+              <td><code>contribution_allocation</code>, <code>projected_wealth</code></td>
+            </tr>
+            <tr>
+              <td><code>run_monte_carlo</code></td>
+              <td><code>customer_profile</code>, <code>contribution_allocation</code>, <code>projected_wealth</code></td>
+              <td><code>wealth_distribution</code>, <code>confidence_score</code></td>
+            </tr>
+            <tr>
+              <td><code>generate_explanation</code></td>
+              <td><code>customer_profile</code>, <code>contribution_allocation</code>, <code>projected_wealth</code>, <code>wealth_distribution</code>, <code>confidence_score</code></td>
+              <td><code>explanation</code></td>
+            </tr>
+            <tr>
+              <td><code>format_output</code></td>
+              <td>All prior outputs</td>
+              <td><code>result</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="node-contract" class="band">
+        <h2>Node Contract</h2>
+        <p>
+          A key is any named value a node adds to the shared state object. When <code>run_lp_optimizer</code> returns
+          <code>{"contribution_allocation": ..., "projected_wealth": ...}</code>, LangGraph merges that into state and
+          those two keys are available to every node that runs after it. Each node reads the keys it needs
+          and writes the keys it owns — nothing more.
+        </p>
+        <p>
+          The full set of valid keys is declared once in <code>RetirementPlanState</code> in <code>state.py</code>. That is the
+          team's agreement on what exists, what type it carries, and which node is responsible for it.
+          Adding a key means adding it there first.
+        </p>
+
+        <pre><code>def run_lp_optimizer(state: RetirementPlanState) -> dict:
+    profile = state["customer_profile"]
+    allocation, wealth = solve(profile)
+    return {"contribution_allocation": allocation, "projected_wealth": wealth}
+
+def run_monte_carlo(state: RetirementPlanState) -> dict:
+    paths = simulate(state["customer_profile"], state["contribution_allocation"])
+    return {"wealth_distribution": paths.distribution, "confidence_score": paths.confidence}</code></pre>
+
+        <div class="callout">
+          <p>
+            A missing key at read time means an upstream node did not run or did not return what it should.
+            That is always a graph wiring problem, not a value to default or skip.
+          </p>
+        </div>
+      </section>
+
+      <section id="domain-model">
+        <h2>Domain Model</h2>
+        <p>
+          The core domain types live in <code>models.py</code>. <code>CustomerProfile</code> describes the customer's financial
+          situation. <code>ContributionAllocation</code> holds the optimizer's annual recommendations before age 50 and
+          after age 50. <code>WealthDistribution</code> captures Monte Carlo percentiles, and <code>RetirementPlanResult</code>
+          packages the final user-facing output.
+        </p>
+        <p>
+          Keep domain terms aligned with <code>CONTEXT.md</code>. For example, <code>SavingsCapacity</code> means annual income
+          minus annual expenses, and employer match dollars do not draw from that capacity. Using that term
+          differently in code or documentation would create a real domain contradiction.
+        </p>
+      </section>
+
+      <section id="calculation-boundaries" class="band">
+        <h2>API Boundaries</h2>
+        <p>
+          In production, the LP optimizer and Monte Carlo engine are separate black-box API calls. This
+          repository simulates both locally, but that is an implementation detail of v1. The only shared
+          contract is the state keys each engine receives as input and the state keys it returns as output.
+          Do not factor LP or Monte Carlo calculation rules into shared implementation code.
+        </p>
+        <div class="grid two">
+          <div class="panel">
+            <h3>LP Optimizer API</h3>
+            <p><strong>Receives:</strong> <code>customer_profile</code></p>
+            <p><strong>Returns:</strong> <code>contribution_allocation</code>, <code>projected_wealth</code></p>
+            <p>
+              Deterministic. Maximizes projected after-tax wealth and produces the recommended annual
+              contribution allocation across account types.
+            </p>
+          </div>
+          <div class="panel">
+            <h3>Monte Carlo API</h3>
+            <p><strong>Receives:</strong> <code>customer_profile</code>, <code>contribution_allocation</code>, <code>projected_wealth</code></p>
+            <p><strong>Returns:</strong> <code>wealth_distribution</code>, <code>confidence_score</code></p>
+            <p>
+              Stochastic. Scores the LP's recommended plan across simulated market and inflation paths and
+              reports the spread of possible outcomes.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="llm-boundary">
+        <h2>LLM Boundary</h2>
+        <p>
+          The explanation node runs after both API calls complete. Its job is narration only — it should
+          not invent new allocations, modify confidence, or reinterpret the optimizer's objective.
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Direction</th>
+              <th>State keys</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Input (reads)</td>
+              <td>
+                <code>customer_profile</code>, <code>contribution_allocation</code>, <code>projected_wealth</code>,
+                <code>wealth_distribution</code>, <code>confidence_score</code>
+              </td>
+            </tr>
+            <tr>
+              <td>Output (returns)</td>
+              <td><code>explanation</code></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p style="margin-top: 20px;">
+          Provider details belong behind <code>llm_gateway.py</code>. Graph wiring belongs in <code>main.py</code>.
+          The explanation node in <code>nodes/explanation.py</code> owns prompt construction — it formats the
+          five input keys into a prompt and calls the gateway.
+        </p>
+        <div class="callout">
+          <p>
+            If you change a state key that feeds the explanation node, update the prompt in
+            <code>nodes/explanation.py</code>. The LLM has no awareness of state — it only sees what the
+            prompt explicitly passes.
+          </p>
+        </div>
+      </section>
+
+      <section id="working-rules" class="band">
+        <h2>Working Rules</h2>
+        <div class="grid two">
+          <div class="panel">
+            <h3>When adding a node</h3>
+            <p>
+              Add the state key to <code>RetirementPlanState</code>, define which upstream keys it reads, return only
+              the keys it owns, and update this guide's state flow table.
+            </p>
+          </div>
+          <div class="panel">
+            <h3>When changing domain language</h3>
+            <p>
+              Update <code>CONTEXT.md</code> as soon as the term is resolved. The glossary is the source of truth for
+              project-specific vocabulary.
+            </p>
+          </div>
+          <div class="panel">
+            <h3>When changing calculations</h3>
+            <p>
+              Add or adjust tests around the affected engine. LP tests should verify constraints and optimal
+              allocation properties; Monte Carlo tests should verify shape and scenario behavior.
+            </p>
+          </div>
+          <div class="panel">
+            <h3>When changing explanations</h3>
+            <p>
+              Check that the prompt uses only facts available in state and that the generated language does
+              not overstate certainty or present stochastic output as a guarantee.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        Open this file directly in a browser: <code>docs/developer-guide.html</code>.
+      </footer>
+    </main>
+  </div>
+</body>
+</html>
