@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from langgraph.graph import StateGraph, START, END
+from langgraph.graph.state import CompiledStateGraph
 from state import RetirementPlanState
 from nodes.load_profile import load_customer_profile
 from nodes.lp_optimizer import run_lp_optimizer
@@ -12,12 +13,14 @@ from services.explanation import ExplanationService
 
 
 def route_by_confidence_band(state: RetirementPlanState) -> str:
+    if state.confidence_band is None:
+        raise ValueError("Confidence band must be set before routing.")
     return state.confidence_band
 
 
 def build_graph(
     explanation_service: ExplanationService,
-) -> StateGraph:
+) -> CompiledStateGraph:
     # Initialize the state graph with our custom state schema
     graph = StateGraph(RetirementPlanState)
 
