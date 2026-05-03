@@ -41,9 +41,15 @@ def build_graph(
     )
     graph.add_node("format_output", format_output)
 
+    # Define the core linear flow: Load profile -> Run Optimizer -> Run Monte Carlo
     graph.add_edge(START, "load_customer_profile")
     graph.add_edge("load_customer_profile", "run_lp_optimizer")
     graph.add_edge("run_lp_optimizer", "run_monte_carlo")
+
+    # Conditional Routing: After running the Monte Carlo simulation, we branch the graph.
+    # The 'route_by_confidence_band' function inspects the state's confidence band.
+    # Depending on whether the band is 'low', 'medium', or 'high', the flow is directed 
+    # to a specific explanation node tailored to that confidence level.
     graph.add_conditional_edges(
         "run_monte_carlo",
         route_by_confidence_band,
@@ -53,6 +59,9 @@ def build_graph(
             "high": "generate_high_confidence_explanation",
         },
     )
+
+    # Reconvergence: All explanation paths merge back into 'format_output' 
+    # to prepare the final response before reaching the END.
     graph.add_edge("generate_low_confidence_explanation", "format_output")
     graph.add_edge("generate_medium_confidence_explanation", "format_output")
     graph.add_edge("generate_high_confidence_explanation", "format_output")
