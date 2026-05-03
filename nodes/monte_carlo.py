@@ -29,8 +29,8 @@ def after_tax_multiplier(acct: str, retirement_tax_rate: float) -> float:
 
 
 def run_monte_carlo(state: RetirementPlanState) -> dict:
-    p = state["customer_profile"]
-    alloc = state["contribution_allocation"]
+    p = state.customer_profile
+    alloc = state.contribution_allocation
     tax_out = p.assumed_retirement_marginal_tax_rate
 
     accumulation_years = p.years_to_retirement

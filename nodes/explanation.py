@@ -21,7 +21,7 @@ def _generate_explanation(
     expected_band: ConfidenceBand,
     service: ExplanationService,
 ) -> dict:
-    actual_band = state["confidence_band"]
+    actual_band = state.confidence_band
     # The graph route is the explanation policy. A mismatch means the graph
     # wiring or state was corrupted, so fail before generating client text.
     if actual_band != expected_band:
@@ -33,12 +33,12 @@ def _generate_explanation(
     # Keep LangGraph-specific state access in the node wrapper; the service
     # receives a stable domain request that production integrations can reuse.
     request = PlanExplanationRequest(
-        customer_profile=state["customer_profile"],
-        contribution_allocation=state["contribution_allocation"],
-        projected_wealth=state["projected_wealth"],
-        wealth_distribution=state["wealth_distribution"],
-        confidence_score=state["confidence_score"],
+        customer_profile=state.customer_profile,
+        contribution_allocation=state.contribution_allocation,
+        projected_wealth=state.projected_wealth,
+        wealth_distribution=state.wealth_distribution,
+        confidence_score=state.confidence_score,
         confidence_band=expected_band,
-        optimization_diagnostics=state.get("optimization_diagnostics"),
+        optimization_diagnostics=state.optimization_diagnostics,
     )
     return {"explanation": service.generate(request)}

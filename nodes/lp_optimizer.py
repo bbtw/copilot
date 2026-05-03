@@ -73,7 +73,7 @@ def _dual_value(constraint: cp.constraints.constraint.Constraint) -> float | Non
 
 
 def run_lp_optimizer(state: RetirementPlanState) -> dict:
-    p = state["customer_profile"]
+    p = state.customer_profile
     r = EXPECTED_RETURN
     tax_out = p.assumed_retirement_marginal_tax_rate
 

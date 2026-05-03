@@ -12,13 +12,12 @@ from services.explanation import ExplanationService
 
 
 def route_by_confidence_band(state: RetirementPlanState) -> str:
-    return state["confidence_band"]
+    return state.confidence_band
 
 
 def build_graph(
-    explanation_service: ExplanationService | None = None,
+    explanation_service: ExplanationService,
 ) -> StateGraph:
-    explanation_service = explanation_service or ExplanationService()
     graph = StateGraph(RetirementPlanState)
 
     graph.add_node("load_customer_profile", load_customer_profile)
@@ -59,6 +58,7 @@ def build_graph(
 
 
 if __name__ == "__main__":
-    app = build_graph()
+    _explanation_service = ExplanationService()
+    app = build_graph(_explanation_service)
     final_state = app.invoke({})
     final_state["result"].print_summary()
