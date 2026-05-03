@@ -10,6 +10,14 @@ from models import (
 
 
 class RetirementPlanState(BaseModel):
+    """
+    The overall state schema for the retirement plan graph.
+    
+    Note on Updates: While nodes receive the full `RetirementPlanState` object, 
+    they should return a standard `dict` containing only the fields they wish 
+    to update. LangGraph idiomatically accepts partial dictionaries and handles 
+    applying those updates back into the Pydantic state object behind the scenes.
+    """
     customer_profile: CustomerProfile | None = None
     contribution_allocation: ContributionAllocation | None = None
     optimization_diagnostics: OptimizationDiagnostics | None = None

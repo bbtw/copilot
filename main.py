@@ -18,6 +18,7 @@ def route_by_confidence_band(state: RetirementPlanState) -> str:
 def build_graph(
     explanation_service: ExplanationService,
 ) -> StateGraph:
+    # Initialize the state graph with our custom state schema
     graph = StateGraph(RetirementPlanState)
 
     graph.add_node("load_customer_profile", load_customer_profile)

@@ -5,14 +5,17 @@ from services.explanation import ExplanationService
 from state import RetirementPlanState
 
 
+from typing import Any
+
 def build_explanation_node(
     expected_band: ConfidenceBand,
     service: ExplanationService,
-) -> Callable[[RetirementPlanState], dict]:
-    def generate_explanation(state: RetirementPlanState) -> dict:
+) -> Any:
+    def generate_explanation(state: RetirementPlanState) -> dict[str, Any]:
         return _generate_explanation(state, expected_band=expected_band, service=service)
 
     return generate_explanation
+
 
 
 def _generate_explanation(
