@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from langgraph.graph import StateGraph, START, END
 from state import RetirementPlanState
 from nodes.load_profile import load_customer_profile
