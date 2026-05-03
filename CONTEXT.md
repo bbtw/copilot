@@ -230,6 +230,11 @@ v1 goal: build a best-practice LangGraph single-pass pipeline. Quality bar is id
 
 v2 goal: make the graph interactive using LangGraph human-in-the-loop / interrupt patterns. The graph pauses after a low-confidence result, presents candidate levers via `PlanRevisionIntake`, waits for customer approval of a `RevisedPlanScenario`, then reruns the LP optimizer and Monte Carlo with the revised inputs. v2 is not in scope until v1 is solid.
 
+## Next Steps
+
+1. **Activate LangSmith tracing** — add `LANGCHAIN_TRACING_V2=true`, `LANGCHAIN_API_KEY`, and `LANGCHAIN_PROJECT=retirement-optimizer` to `.env`, run the pipeline, and confirm the full trace (all graph nodes + LLM call) appears in the LangSmith UI.
+2. **Service-layer refactors for remaining nodes** — `lp_optimizer`, `monte_carlo`, `load_profile`, and `format_output` still contain implementation logic directly in node functions. The target shape is the same wrapper/service pattern already used by the explanation nodes.
+
 ## Flagged Ambiguities
 
 - **Low-confidence workflow escalation** — resolved for v2 as **PlanRevisionIntake** followed by another optimization attempt when the customer changes adjustable planning levers; advisor escalation and required disclosure generation remain separate unresolved workflows.
