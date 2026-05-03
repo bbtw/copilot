@@ -87,7 +87,7 @@ The current test suite covers the LP optimizer constraints and Monte Carlo proje
 
 ```
 ├── main.py              ← builds and runs the graph
-├── state.py             ← RetirementPlanState TypedDict
+├── state.py             ← RetirementPlanState Pydantic model
 ├── models.py            ← data classes
 ├── services/
 │   ├── explanation.py   ← explanation prompt assembly and LLM orchestration
@@ -102,7 +102,7 @@ The current test suite covers the LP optimizer constraints and Monte Carlo proje
 
 ## How state flows through the graph
 
-The graph is built as a `StateGraph(RetirementPlanState)`. `RetirementPlanState` is a `TypedDict` that names every key the pipeline may add:
+The graph is built as a `StateGraph(RetirementPlanState)`. `RetirementPlanState` is a Pydantic model that names every key the pipeline may add:
 
 ```python
 customer_profile
@@ -115,7 +115,7 @@ explanation
 result
 ```
 
-`main.py` starts the graph with `app.invoke({})`, so the initial state is empty. Each node receives the accumulated state and returns only the keys it owns. LangGraph merges that returned partial dict into the shared state before calling the next node.
+`main.py` starts the graph with `app.invoke({})`, so the initial state is empty. Each node receives the accumulated `RetirementPlanState` object and returns only the keys it owns as `dict[str, Any]`. LangGraph merges that returned partial dict into the shared state before calling the next node.
 
 The v1 state sequence is:
 

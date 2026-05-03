@@ -5,6 +5,7 @@ from models import (
     WealthDistribution,
 )
 from nodes import explanation
+from state import RetirementPlanState
 
 
 class FakeExplanationService:
@@ -16,9 +17,9 @@ class FakeExplanationService:
         return "explanation"
 
 
-def _state(confidence_band: str) -> dict:
-    return {
-        "customer_profile": CustomerProfile(
+def _state(confidence_band: str) -> RetirementPlanState:
+    return RetirementPlanState(
+        customer_profile=CustomerProfile(
             age=42,
             retirement_age=65,
             annual_income=120_000,
@@ -34,15 +35,15 @@ def _state(confidence_band: str) -> dict:
             assumed_retirement_marginal_tax_rate=0.12,
             filing_status="single",
         ),
-        "contribution_allocation": ContributionAllocation(
+        contribution_allocation=ContributionAllocation(
             pre50={a: 0.0 for a in ACCOUNT_TYPES},
             post50={a: 0.0 for a in ACCOUNT_TYPES},
         ),
-        "projected_wealth": 1_000_000,
-        "wealth_distribution": WealthDistribution(p10=600_000, p50=900_000, p90=1_300_000),
-        "confidence_score": 0.35,
-        "confidence_band": confidence_band,
-    }
+        projected_wealth=1_000_000,
+        wealth_distribution=WealthDistribution(p10=600_000, p50=900_000, p90=1_300_000),
+        confidence_score=0.35,
+        confidence_band=confidence_band,
+    )
 
 
 def test_build_explanation_node_adapts_state_to_service_request():

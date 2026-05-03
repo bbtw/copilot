@@ -1,3 +1,6 @@
+from collections.abc import Callable
+from typing import Any
+
 import numpy as np
 from models import WealthDistribution, ACCOUNT_TYPES, ConfidenceBand
 from state import RetirementPlanState
@@ -7,8 +10,6 @@ RETURN_MEAN = 0.07
 RETURN_STD = 0.15
 INFLATION_MEAN = 0.03
 INFLATION_STD = 0.01
-
-RNG = np.random.default_rng(seed=42)
 
 
 def classify_confidence(score: float) -> ConfidenceBand:
@@ -28,7 +29,22 @@ def after_tax_multiplier(acct: str, retirement_tax_rate: float) -> float:
         return 1.0 - retirement_tax_rate
 
 
-def run_monte_carlo(state: RetirementPlanState) -> dict:
+def build_monte_carlo_node(
+        rng: np.random.Generator | None = None,
+) -> Callable[[RetirementPlanState], dict[str, Any]]:
+    _rng = rng if rng is not None else np.random.default_rng()
+
+    def run_monte_carlo(state: RetirementPlanState) -> dict[str, Any]:
+        return _run_monte_carlo(state, rng=_rng)
+
+    return run_monte_carlo
+
+
+def _run_monte_carlo(
+    state: RetirementPlanState,
+    *,
+    rng: np.random.Generator,
+) -> dict[str, Any]:
     p = state.customer_profile
     alloc = state.contribution_allocation
     tax_out = p.assumed_retirement_marginal_tax_rate
@@ -42,8 +58,8 @@ def run_monte_carlo(state: RetirementPlanState) -> dict:
     terminal_wealth_nominal = np.zeros(N_PATHS)
     retirement_success = np.zeros(N_PATHS, dtype=bool)
 
-    returns = RNG.normal(RETURN_MEAN, RETURN_STD, size=(N_PATHS, total_years))
-    inflations = RNG.normal(INFLATION_MEAN, INFLATION_STD, size=(N_PATHS, total_years))
+    returns = rng.normal(RETURN_MEAN, RETURN_STD, size=(N_PATHS, total_years))
+    inflations = rng.normal(INFLATION_MEAN, INFLATION_STD, size=(N_PATHS, total_years))
 
     for path in range(N_PATHS):
         balances = {a: p.balances.get(a, 0.0) for a in ACCOUNT_TYPES}
@@ -56,7 +72,7 @@ def run_monte_carlo(state: RetirementPlanState) -> dict:
             contrib = alloc.for_age(current_age)
             ret = returns[path, yr]
             inf = inflations[path, yr]
-            
+
             # Calculate employer match: rate * eligible contribution up to a maximum cap
             matched_dollars = p.employer_match_rate * min(
                 contrib.get("401k", 0.0) + contrib.get("roth_401k", 0.0),
@@ -91,12 +107,12 @@ def run_monte_carlo(state: RetirementPlanState) -> dict:
         for yr in range(accumulation_years, total_years):
             ret = returns[path, yr]
             inf = inflations[path, yr]
-            
+
             cumulative_inflation *= (1 + inf)
             retirement_assets *= (1 + ret)
             # Deduct living expenses after adjusting for cumulative inflation
             retirement_assets -= net_retirement_expenses * cumulative_inflation
-            
+
             if retirement_assets < 0:
                 survived = False
                 break

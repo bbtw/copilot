@@ -1,7 +1,10 @@
+import numpy as np
 import pytest
 
 from models import ACCOUNT_TYPES, ContributionAllocation, CustomerProfile
 import nodes.monte_carlo as monte_carlo
+from nodes.monte_carlo import build_monte_carlo_node
+from state import RetirementPlanState
 
 
 def _profile(**overrides) -> CustomerProfile:
@@ -38,12 +41,13 @@ def test_monte_carlo_includes_employer_match_and_scores_retirement_survival(monk
     )
     alloc.post50["401k"] = 6_000
 
-    result = monte_carlo.run_monte_carlo(
-        {
-            "customer_profile": _profile(),
-            "contribution_allocation": alloc,
-            "projected_wealth": 9_000,
-        }
+    run = build_monte_carlo_node(rng=np.random.default_rng(42))
+    result = run(
+        RetirementPlanState(
+            customer_profile=_profile(),
+            contribution_allocation=alloc,
+            projected_wealth=9_000,
+        )
     )
 
     assert result["wealth_distribution"].p50 == pytest.approx(9_000)
@@ -63,17 +67,18 @@ def test_expected_retirement_income_offsets_retirement_expenses(monkeypatch):
         post50={a: 0.0 for a in ACCOUNT_TYPES},
     )
 
-    state = {
-        "customer_profile": _profile(
+    state = RetirementPlanState(
+        customer_profile=_profile(
             balances={"401k": 5_000, **{a: 0.0 for a in ACCOUNT_TYPES if a != "401k"}},
             retirement_annual_expenses=30_000,
             expected_retirement_income=25_000,
         ),
-        "contribution_allocation": alloc,
-        "projected_wealth": 1_000_000,
-    }
+        contribution_allocation=alloc,
+        projected_wealth=1_000_000,
+    )
 
-    result = monte_carlo.run_monte_carlo(state)
+    run = build_monte_carlo_node(rng=np.random.default_rng(42))
+    result = run(state)
 
     assert result["wealth_distribution"].p50 == pytest.approx(5_000)
     assert result["confidence_score"] == pytest.approx(1.0)

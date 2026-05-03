@@ -1,8 +1,10 @@
+from typing import Any
+
 from models import RetirementPlanResult
 from state import RetirementPlanState
 
 
-def format_output(state: RetirementPlanState) -> dict:
+def format_output(state: RetirementPlanState) -> dict[str, Any]:
     result = RetirementPlanResult(
         contribution_allocation=state.contribution_allocation,
         projected_wealth=state.projected_wealth,

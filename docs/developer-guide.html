@@ -564,13 +564,13 @@
           Adding a key means adding it there first.
         </p>
 
-        <pre><code>def run_lp_optimizer(state: RetirementPlanState) -> dict:
-    profile = state["customer_profile"]
+        <pre><code>def run_lp_optimizer(state: RetirementPlanState) -> dict[str, Any]:
+    profile = state.customer_profile
     allocation, wealth = solve(profile)
     return {"contribution_allocation": allocation, "projected_wealth": wealth}
 
-def run_monte_carlo(state: RetirementPlanState) -> dict:
-    paths = simulate(state["customer_profile"], state["contribution_allocation"])
+def run_monte_carlo(state: RetirementPlanState) -> dict[str, Any]:
+    paths = simulate(state.customer_profile, state.contribution_allocation)
     return {
         "wealth_distribution": paths.distribution,
         "confidence_score": paths.confidence,
@@ -578,7 +578,7 @@ def run_monte_carlo(state: RetirementPlanState) -> dict:
     }
 
 def route_by_confidence_band(state: RetirementPlanState) -> str:
-    return state["confidence_band"]</code></pre>
+    return state.confidence_band</code></pre>
 
         <div class="callout">
           <p>

@@ -1,3 +1,5 @@
+from typing import Any
+
 import cvxpy as cp
 from models import (
     ACCOUNT_TYPES,
@@ -72,7 +74,7 @@ def _dual_value(constraint: cp.constraints.constraint.Constraint) -> float | Non
         return float(constraint.dual_value.item())
 
 
-def run_lp_optimizer(state: RetirementPlanState) -> dict:
+def run_lp_optimizer(state: RetirementPlanState) -> dict[str, Any]:
     p = state.customer_profile
     r = EXPECTED_RETURN
     tax_out = p.assumed_retirement_marginal_tax_rate

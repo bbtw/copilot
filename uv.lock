@@ -459,6 +459,7 @@ dependencies = [
     { name = "cvxpy" },
     { name = "dotenv" },
     { name = "langgraph" },
+    { name = "langsmith" },
     { name = "numpy" },
     { name = "openai" },
 ]
@@ -473,6 +474,7 @@ requires-dist = [
     { name = "cvxpy", specifier = ">=1.5" },
     { name = "dotenv", specifier = ">=0.9.9" },
     { name = "langgraph", specifier = ">=0.2" },
+    { name = "langsmith", specifier = ">=0.1" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "openai", specifier = ">=2.33.0" },
 ]

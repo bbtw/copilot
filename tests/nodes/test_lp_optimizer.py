@@ -1,6 +1,7 @@
 import pytest
 from models import CustomerProfile, ACCOUNT_TYPES
 from nodes.lp_optimizer import run_lp_optimizer, compute_roth_ira_limit, IRS_LIMITS
+from state import RetirementPlanState
 
 
 def _profile(**overrides) -> CustomerProfile:
@@ -25,7 +26,7 @@ def _profile(**overrides) -> CustomerProfile:
 
 
 def _run(profile: CustomerProfile) -> dict:
-    return run_lp_optimizer({"customer_profile": profile})
+    return run_lp_optimizer(RetirementPlanState(customer_profile=profile))
 
 
 # --- Core allocation properties ---

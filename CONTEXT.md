@@ -132,7 +132,7 @@ The service-level contract consumed by `ExplanationService` to generate a client
 _Avoid_: Passing raw `RetirementPlanState` into explanation services or coupling explanation generation to LangGraph state shape
 
 **GatewayClient**
-A single concrete class in `services/llm.py` that wraps an OpenAI-format REST API call. Configured via environment variables (base URL, model provider, model ID). Points at the enterprise LLM gateway in production and at Ollama locally — the switch is config-level, not code-level. Injected into `ExplanationService`; tests mock it at the call site.
+A single concrete class in `services/llm.py` that wraps an OpenAI-format REST API call. Configured via environment variables (base URL, model provider, model ID). Points at the enterprise LLM gateway in production and at Ollama locally — the switch is config-level, not code-level. The OpenAI client is wrapped with `langsmith.wrappers.wrap_openai` at construction time so every LLM call is traced in LangSmith when `LANGCHAIN_TRACING_V2=true`; the wrapper is a no-op when tracing is not configured. Injected into `ExplanationService`; tests mock it at the call site.
 _Avoid_: Provider-specific SDK imports, multiple adapter classes, Protocol or structural-typing indirection, switching logic in application code
 
 **RetirementPlanResult**
@@ -163,13 +163,13 @@ format_output           ← structured dict + human-readable summary
 ```
 lang-graph-state/
 ├── main.py                  ← builds and runs the LangGraph graph
-├── state.py                 ← RetirementPlanState TypedDict
+├── state.py                 ← RetirementPlanState Pydantic model
 ├── models.py                ← CustomerProfile, ContributionAllocation, WealthDistribution, RetirementPlanResult
 ├── docs/
 │   └── developer-guide.html ← new-developer teaching guide for graph state flow and boundaries
 ├── services/
 │   ├── explanation.py       ← explanation prompt assembly and LLM orchestration
-│   └── llm.py               ← LLM client protocol and Anthropic adapter
+│   └── llm.py               ← GatewayClient wrapping OpenAI-format REST API (Ollama locally, enterprise gateway in prod)
 └── nodes/
     ├── load_profile.py      ← mocked CustomerProfile (42yo, $120k income, HDHP enrolled)
     ├── lp_optimizer.py      ← cvxpy LP; sets contribution_allocation + projected_wealth
@@ -178,7 +178,7 @@ lang-graph-state/
     └── format_output.py     ← assembles RetirementPlanResult
 ```
 
-Each node is a plain function `(state: RetirementPlanState) -> dict`. The graph starts with `app.invoke({})`, so the initial state is empty. Every node reads the keys it requires from the accumulated state and returns only the keys it produces; LangGraph merges that partial dict into the state before invoking the next node.
+Each node is a plain function `(state: RetirementPlanState) -> dict[str, Any]`. The graph starts with `app.invoke({})`, so the initial state is empty. Every node reads the attributes it requires from the accumulated Pydantic state object and returns only the keys it produces; LangGraph merges that partial dict into the state before invoking the next node.
 
 | Node | Reads | Returns |
 |---|---|---|
@@ -200,9 +200,10 @@ Each node is a plain function `(state: RetirementPlanState) -> dict`. The graph 
 - **Employer match is modeled as a subsidy** in the objective (piecewise-linear `min`), not a constraint.
 - **Roth IRA phase-outs are input preprocessing**, not LP constraints — collapsed to fixed limits before the LP runs. Traditional IRA deductibility phase-outs are deferred.
 - **MC reports distribution percentiles in today's dollars** by deflating with simulated inflation. Confidence is returned by the Monte Carlo processor as the probability that retirement income and assets cover `RetirementAnnualExpenses` for `RetirementYearsToPlan` years after the customer's retirement age.
-- **LLM accessed through `services.llm`**. The module defines `GatewayClient`, a single concrete class backed by the OpenAI-format REST API. Production points at the enterprise LLM gateway; local development points at Ollama. The switch is config-level (env vars), not code-level.
+- **LLM accessed through `services.llm`**. The module defines `GatewayClient`, a single concrete class backed by the OpenAI-format REST API. Production points at the enterprise LLM gateway; local development points at Ollama. The switch is config-level (env vars), not code-level. The client is wrapped with `langsmith.wrappers.wrap_openai` so LLM calls appear in LangSmith traces alongside LangGraph node traces — enable with `LANGCHAIN_TRACING_V2=true` and `LANGCHAIN_API_KEY`.
 - **ExplanationService uses dependency injection for LLM access**. It accepts a `GatewayClient` so tests can mock it at the call site. `main.build_graph()` wires the explanation service into the graph.
 - **Explanation nodes set the service-wrapper pattern**. Graph construction wires an `ExplanationService`; confidence-specific explanation nodes remain visible in the graph but only adapt `RetirementPlanState` to `PlanExplanationRequest` and return the `explanation` state patch.
+- **Monte Carlo RNG is injected via `build_monte_carlo_node(rng=None)`**. Production passes no RNG (a fresh non-seeded generator is created at graph-build time). Tests pass `np.random.default_rng(42)` for determinism. The fixed seed in the previous implementation was development convenience, not policy — same inputs do not guarantee the same `ConfidenceScore` in production.
 - **CustomerProfile is mocked** in v1. All data interfaces are designed to be replaced by real API calls without changing node signatures.
 - **LP solver: cvxpy**. Constraints are expressed as Python expressions that read like math (readable, auditable).
 - **Unit tests on the LP optimizer** are in scope (known inputs → known optimal output). Not over-engineering for a financial product — table stakes.
@@ -222,6 +223,12 @@ Each node is a plain function `(state: RetirementPlanState) -> dict`. The graph 
 - **Conversational input gathering** — v1 takes a fully-populated `CustomerProfile`; v2 adds the LLM-driven conversation loop.
 - **Remaining service-layer node refactors** — explanation has the target node-wrapper/service shape; optimization, simulation, profile loading, and formatting still contain implementation logic directly.
 - **Interactive low-confidence revision workflow** — deferred; the first readiness implementation updates Monte Carlo scoring and explanation routing, but does not yet implement `PlanRevisionIntake`, `RevisedPlanScenario`, or comparison output.
+
+## Project Goal
+
+v1 goal: build a best-practice LangGraph single-pass pipeline. Quality bar is idiomatic LangGraph, clean contracts, and testability — not feature completeness.
+
+v2 goal: make the graph interactive using LangGraph human-in-the-loop / interrupt patterns. The graph pauses after a low-confidence result, presents candidate levers via `PlanRevisionIntake`, waits for customer approval of a `RevisedPlanScenario`, then reruns the LP optimizer and Monte Carlo with the revised inputs. v2 is not in scope until v1 is solid.
 
 ## Flagged Ambiguities
 

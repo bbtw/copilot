@@ -1,8 +1,10 @@
+from typing import Any
+
 from models import CustomerProfile
 from state import RetirementPlanState
 
 
-def load_customer_profile(state: RetirementPlanState) -> dict:
+def load_customer_profile(state: RetirementPlanState) -> dict[str, Any]:
     profile = CustomerProfile(
         age=42,
         retirement_age=65,

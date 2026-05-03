@@ -1,14 +1,15 @@
 import os
 
 from openai import OpenAI
+from langsmith.wrappers import wrap_openai
 
 
 class GatewayClient:
     def __init__(self) -> None:
-        self._client = OpenAI(
+        self._client = wrap_openai(OpenAI(
             base_url=os.environ["LLM_GATEWAY_BASE_URL"],
             api_key=os.environ.get("LLM_GATEWAY_API_KEY", "ollama"),
-        )
+        ))
         self._model_provider = os.environ.get("LLM_MODEL_PROVIDER", "")
         self._model_id = os.environ["LLM_MODEL_ID"]
 
