@@ -259,6 +259,9 @@ def run_lp_optimizer(state: RetirementPlanState) -> dict:
         m_post >= 0,
         lambda: m_post.value,
     )
+    # We use auxiliary variables `m_pre` and `m_post` to represent the *eligible* contribution amount 
+    # that the employer will match. This amount is bounded by two distinct conditions:
+    # 1. It cannot exceed the actual employee contributions made to 401k and Roth 401k.
     add_constraint(
         "pre50_match_cannot_exceed_401k_contributions",
         "employer_match",
@@ -266,6 +269,7 @@ def run_lp_optimizer(state: RetirementPlanState) -> dict:
         m_pre <= x_pre[i401k] + x_pre[iroth401k],
         lambda: x_pre.value[i401k] + x_pre.value[iroth401k] - m_pre.value,
     )
+    # 2. It cannot exceed the employer's maximum match cap (calculated as a % of annual income).
     add_constraint(
         "pre50_match_cap",
         "employer_match",
@@ -310,6 +314,11 @@ def run_lp_optimizer(state: RetirementPlanState) -> dict:
 
     projected_wealth = float(prob.value) + existing_wealth
 
+    # --- Post-Optimization Analysis ---
+    # Extract detailed diagnostics from the solver's result.
+    # We collect the dual values (often called shadow prices or reduced costs).
+    # These tell us the marginal value of relaxing a constraint—i.e., how much the 
+    # total projected wealth would increase if a constraint limit were raised by $1.
     variable_diagnostics = []
     for phase, values, fv_factor in (
         ("pre50", x_pre.value, fv_pre50),

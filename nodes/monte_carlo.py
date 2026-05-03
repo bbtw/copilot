@@ -49,11 +49,15 @@ def run_monte_carlo(state: RetirementPlanState) -> dict:
         balances = {a: p.balances.get(a, 0.0) for a in ACCOUNT_TYPES}
         cumulative_inflation = 1.0
 
+        # Phase 1: Accumulation
+        # Simulate annual compounding, adding contributions and matching employer funds.
         for yr in range(accumulation_years):
             current_age = p.age + yr
             contrib = alloc.for_age(current_age)
             ret = returns[path, yr]
             inf = inflations[path, yr]
+            
+            # Calculate employer match: rate * eligible contribution up to a maximum cap
             matched_dollars = p.employer_match_rate * min(
                 contrib.get("401k", 0.0) + contrib.get("roth_401k", 0.0),
                 p.employer_match_cap * p.annual_income,
@@ -63,6 +67,7 @@ def run_monte_carlo(state: RetirementPlanState) -> dict:
                 annual_contribution = contrib.get(acct, 0.0)
                 if acct == "401k":
                     annual_contribution += matched_dollars
+                # Compound the existing balance and add this year's contribution
                 balances[acct] = balances[acct] * (1 + ret) + annual_contribution
 
             cumulative_inflation *= (1 + inf)
@@ -74,18 +79,24 @@ def run_monte_carlo(state: RetirementPlanState) -> dict:
         terminal_wealth_today[path] = after_tax / cumulative_inflation
 
         retirement_assets = after_tax
+        # Calculate the shortfall between expenses and fixed income (e.g., Social Security)
         net_retirement_expenses = max(
             0.0,
             p.retirement_annual_expenses - p.expected_retirement_income,
         )
         survived = True
 
+        # Phase 2: Drawdown (Retirement)
+        # Withdraw inflation-adjusted expenses each year and check if we run out of money
         for yr in range(accumulation_years, total_years):
             ret = returns[path, yr]
             inf = inflations[path, yr]
+            
             cumulative_inflation *= (1 + inf)
             retirement_assets *= (1 + ret)
+            # Deduct living expenses after adjusting for cumulative inflation
             retirement_assets -= net_retirement_expenses * cumulative_inflation
+            
             if retirement_assets < 0:
                 survived = False
                 break
