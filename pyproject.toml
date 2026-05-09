@@ -4,6 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "langgraph>=0.2",
+    "langchain-openai>=0.2",
     "cvxpy>=1.5",
     "numpy>=1.26",
     "openai>=2.33.0",

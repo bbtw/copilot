@@ -25,5 +25,8 @@ class RetirementPlanState(BaseModel):
     wealth_distribution: WealthDistribution | None = None
     confidence_score: float = 0.0
     confidence_band: ConfidenceBand | None = None
+    standard_analysis: str = ""
+    accumulation_analysis: str = ""
+    withdrawal_analysis: str = ""
     explanation: str = ""
     result: RetirementPlanResult | None = None

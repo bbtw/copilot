@@ -8,11 +8,15 @@ import numpy as np
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.state import CompiledStateGraph
+
 from state import RetirementPlanState
 from nodes.load_profile import load_customer_profile
 from nodes.lp_optimizer import run_lp_optimizer
 from nodes.monte_carlo import build_monte_carlo_node
-from nodes.explanation import build_explanation_node
+from nodes.standard_analysis import build_standard_analysis_node
+from nodes.accumulation_agent import build_accumulation_node
+from nodes.withdrawal_agent import build_withdrawal_node
+from nodes.synthesize_explanation import build_synthesize_explanation_node
 from nodes.format_output import format_output
 from services.explanation import ExplanationService
 
@@ -20,14 +24,8 @@ StatePatch = dict[str, Any]
 GraphNode = Callable[[RetirementPlanState], StatePatch]
 
 
-def as_langgraph_node(node: GraphNode) -> Any:
+def as_node(node: GraphNode) -> Any:
     return cast(Any, node)
-
-
-def route_by_confidence_band(state: RetirementPlanState) -> str:
-    if state.confidence_band is None:
-        raise ValueError("Confidence band must be set before routing.")
-    return state.confidence_band
 
 
 def build_graph(
@@ -36,50 +34,38 @@ def build_graph(
     rng: np.random.Generator | None = None,
     checkpointer: BaseCheckpointSaver | None = None,
 ) -> CompiledStateGraph:
-    # Initialize the state graph with our custom state schema
     graph = StateGraph(RetirementPlanState)
 
-    graph.add_node("load_customer_profile", as_langgraph_node(load_customer_profile))
-    graph.add_node("run_lp_optimizer", as_langgraph_node(run_lp_optimizer))
-    graph.add_node("run_monte_carlo", as_langgraph_node(build_monte_carlo_node(rng)))
-    graph.add_node(
-        "generate_low_confidence_explanation",
-        as_langgraph_node(build_explanation_node("low", explanation_service)),
-    )
-    graph.add_node(
-        "generate_medium_confidence_explanation",
-        as_langgraph_node(build_explanation_node("medium", explanation_service)),
-    )
-    graph.add_node(
-        "generate_high_confidence_explanation",
-        as_langgraph_node(build_explanation_node("high", explanation_service)),
-    )
-    graph.add_node("format_output", as_langgraph_node(format_output))
+    # Data gathering — sequential
+    graph.add_node("load_customer_profile", as_node(load_customer_profile))
+    graph.add_node("run_lp_optimizer", as_node(run_lp_optimizer))
+    graph.add_node("run_monte_carlo", as_node(build_monte_carlo_node(rng)))
 
-    # Define the core linear flow: Load profile -> Run Optimizer -> Run Monte Carlo
+    # Parallel analysis — fan-out from run_monte_carlo
+    graph.add_node("run_standard_analysis", as_node(build_standard_analysis_node(explanation_service)))
+    graph.add_node("run_accumulation_agent", as_node(build_accumulation_node()))
+    graph.add_node("run_withdrawal_agent", as_node(build_withdrawal_node()))
+
+    # Synthesis and output — fan-in
+    graph.add_node("synthesize_explanation", as_node(build_synthesize_explanation_node(explanation_service)))
+    graph.add_node("format_output", as_node(format_output))
+
+    # Sequential data gathering flow
     graph.add_edge(START, "load_customer_profile")
     graph.add_edge("load_customer_profile", "run_lp_optimizer")
     graph.add_edge("run_lp_optimizer", "run_monte_carlo")
 
-    # Conditional Routing: After running the Monte Carlo simulation, we branch the graph.
-    # The 'route_by_confidence_band' function inspects the state's confidence band.
-    # Depending on whether the band is 'low', 'medium', or 'high', the flow is directed
-    # to a specific explanation node tailored to that confidence level.
-    graph.add_conditional_edges(
-        "run_monte_carlo",
-        route_by_confidence_band,
-        {
-            "low": "generate_low_confidence_explanation",
-            "medium": "generate_medium_confidence_explanation",
-            "high": "generate_high_confidence_explanation",
-        },
-    )
+    # Fan-out: all three agents start after Monte Carlo completes
+    graph.add_edge("run_monte_carlo", "run_standard_analysis")
+    graph.add_edge("run_monte_carlo", "run_accumulation_agent")
+    graph.add_edge("run_monte_carlo", "run_withdrawal_agent")
 
-    # Reconvergence: All explanation paths merge back into 'format_output'
-    # to prepare the final response before reaching the END.
-    graph.add_edge("generate_low_confidence_explanation", "format_output")
-    graph.add_edge("generate_medium_confidence_explanation", "format_output")
-    graph.add_edge("generate_high_confidence_explanation", "format_output")
+    # Fan-in: synthesis waits for all three to write their state fields
+    graph.add_edge("run_standard_analysis", "synthesize_explanation")
+    graph.add_edge("run_accumulation_agent", "synthesize_explanation")
+    graph.add_edge("run_withdrawal_agent", "synthesize_explanation")
+
+    graph.add_edge("synthesize_explanation", "format_output")
     graph.add_edge("format_output", END)
 
     return graph.compile(checkpointer=checkpointer)
@@ -88,6 +74,7 @@ def build_graph(
 if __name__ == "__main__":
     import uuid
     from langgraph.checkpoint.memory import MemorySaver
+
     _explanation_service = ExplanationService()
     app = build_graph(_explanation_service, checkpointer=MemorySaver())
     final_state = app.invoke({}, config={"configurable": {"thread_id": str(uuid.uuid4())}})
