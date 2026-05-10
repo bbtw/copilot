@@ -1,5 +1,3 @@
-import logging
-from time import perf_counter
 from typing import Any
 
 import cvxpy as cp
@@ -12,8 +10,7 @@ from lang_graph_state.domain.models import (
     OptimizationDiagnostics,
     OptimizationVariableDiagnostic,
 )
-
-logger = logging.getLogger(__name__)
+from lang_graph_state.instrumentation.timing import timed
 
 EXPECTED_RETURN = 0.07
 
@@ -76,19 +73,18 @@ def _dual_value(constraint: cp.constraints.constraint.Constraint) -> float | Non
         return float(constraint.dual_value.item())
 
 
+@timed(
+    "lp_solve",
+    finish_attrs=lambda result: {
+        "projected_wealth": f"{result['projected_wealth']:.2f}",
+        "binding_constraints": sum(1 for c in result["optimization_diagnostics"].constraints if c.binding),
+    },
+)
 def solve_lp(profile: CustomerProfile) -> dict[str, Any]:
     """
     Solve the retirement contribution LP for the given profile.
     Returns contribution_allocation, projected_wealth, and optimization_diagnostics.
     """
-    logger.info(
-        "LP solve start age=%s retirement_age=%s savings_capacity=%.2f hdhp_enrolled=%s",
-        profile.age,
-        profile.retirement_age,
-        profile.savings_capacity,
-        profile.hdhp_enrolled,
-    )
-    started = perf_counter()
     p = profile
     r = EXPECTED_RETURN
     tax_out = p.assumed_retirement_marginal_tax_rate
@@ -205,15 +201,7 @@ def solve_lp(profile: CustomerProfile) -> dict[str, Any]:
     )
 
     prob = cp.Problem(cp.Maximize(contrib_wealth + match_wealth), constraints)
-    solver_started = perf_counter()
     prob.solve(solver=cp.CLARABEL)
-    logger.info(
-        "LP solver finished status=%s solver=%s elapsed=%.2fs objective=%s",
-        prob.status,
-        "cvxpy.CLARABEL",
-        perf_counter() - solver_started,
-        f"{float(prob.value):.2f}" if prob.value is not None else "n/a",
-    )
 
     if prob.status not in ("optimal", "optimal_inaccurate"):
         raise RuntimeError(f"LP solver failed: {prob.status}")
@@ -244,7 +232,7 @@ def solve_lp(profile: CustomerProfile) -> dict[str, Any]:
         for item in named_constraints
     ]
 
-    result = {
+    return {
         "contribution_allocation": ContributionAllocation(pre50=pre_alloc, post50=post_alloc),
         "projected_wealth": float(prob.value) + existing_wealth,
         "optimization_diagnostics": OptimizationDiagnostics(
@@ -253,11 +241,3 @@ def solve_lp(profile: CustomerProfile) -> dict[str, Any]:
             variables=variable_diagnostics, constraints=constraint_diagnostics,
         ),
     }
-    binding_count = sum(1 for constraint in constraint_diagnostics if constraint.binding)
-    logger.info(
-        "LP solve finish elapsed=%.2fs projected_wealth=%.2f binding_constraints=%s",
-        perf_counter() - started,
-        result["projected_wealth"],
-        binding_count,
-    )
-    return result

@@ -192,6 +192,7 @@ lang-graph-state/
 │   └── lang_graph_state/
 │       ├── main.py              ← builds and runs the LangGraph graph
 │       ├── instrumentation/
+│       │   ├── logging.py       ← structured console log formatter and configure_logging()
 │       │   ├── nodes.py         ← node timing/logging wrapper
 │       │   └── tracing.py       ← RunnableConfig tags, metadata, and checkpoint thread_id helper
 │       ├── domain/

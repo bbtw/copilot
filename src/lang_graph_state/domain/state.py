@@ -8,6 +8,7 @@ from lang_graph_state.domain.models import (
     ContributionAllocation,
     OptimizationDiagnostics,
     PlanAnalysisSection,
+    PlanExplanationRequest,
     WealthDistribution,
     RetirementPlanResult,
     merge_analysis_sections,
@@ -38,6 +39,17 @@ class RetirementPlanState(BaseModel):
 
     def analysis_by_kind(self) -> dict[AnalysisKind, str]:
         return {section.kind: section.content for section in self.analysis_sections}
+
+    def to_explanation_request(self) -> PlanExplanationRequest:
+        return PlanExplanationRequest(
+            customer_profile=self.customer_profile,
+            contribution_allocation=self.contribution_allocation,
+            projected_wealth=self.projected_wealth,
+            wealth_distribution=self.wealth_distribution,
+            confidence_score=self.confidence_score,
+            confidence_band=self.confidence_band,
+            optimization_diagnostics=self.optimization_diagnostics,
+        )
 
     def to_result(self) -> RetirementPlanResult:
         return RetirementPlanResult(

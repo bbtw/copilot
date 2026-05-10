@@ -429,8 +429,8 @@
 
         <div class="grid three">
           <div class="panel stat">
-            <strong>8</strong>
-            <p>Graph nodes: two sequential data nodes, three concurrent LLM nodes, one synthesis node, and two bookend nodes.</p>
+            <strong>10</strong>
+            <p>Graph nodes: three sequential data nodes (load, LP optimizer, Monte Carlo), three concurrent analysis nodes, one synthesis node, one output node, and two bookend nodes (START/END).</p>
           </div>
           <div class="panel stat">
             <strong>11</strong>
@@ -642,12 +642,13 @@ def run_lp_optimizer(state: RetirementPlanState) -> dict[str, Any]:
     }
 
 # Builder pattern — captures dependencies at build time, state at call time
-def build_standard_analysis_node(svc: ExplanationService):
-    async def run(state: RetirementPlanState) -> dict[str, Any]:
+def build_standard_analysis_node(service: ExplanationService):
+    async def run_standard_analysis(state: RetirementPlanState) -> dict[str, Any]:
+        request = PlanExplanationRequest(customer_profile=state.customer_profile, ...)
         return {"analysis_sections": [
-            PlanAnalysisSection(kind="standard", content=await svc.astandard_analysis(state))
+            PlanAnalysisSection(kind="standard", content=await service.astandard_analysis(request))
         ]}
-    return run
+    return run_standard_analysis
 
 # Gateway-backed analysis node — probes locally, then calls ExplanationService
 	def _build_analysis_node(*, service_call, build_probes, analysis_kind):
@@ -703,7 +704,7 @@ def build_standard_analysis_node(svc: ExplanationService):
           </div>
           <div class="panel">
             <h3>Monte Carlo API</h3>
-            <p><strong>Receives:</strong> <code>customer_profile</code>, <code>contribution_allocation</code>, <code>projected_wealth</code></p>
+            <p><strong>Receives:</strong> <code>customer_profile</code>, <code>contribution_allocation</code></p>
             <p><strong>Returns:</strong> <code>wealth_distribution</code>, <code>confidence_score</code>, <code>confidence_band</code></p>
             <p>
               Stochastic. Scores the LP's recommended plan across simulated market and inflation paths and
@@ -759,8 +760,9 @@ def build_standard_analysis_node(svc: ExplanationService):
 
         <p style="margin-top: 20px;">
           Provider details belong behind <code>src/lang_graph_state/services/llm.py</code>. Graph wiring belongs in <code>src/lang_graph_state/main.py</code>.
-          Prompt construction lives in the node files — <code>src/lang_graph_state/nodes/standard_analysis.py</code>,
-          <code>src/lang_graph_state/nodes/analysis_agents.py</code>, and <code>src/lang_graph_state/nodes/synthesize_explanation.py</code>.
+          Prompt construction lives in <code>src/lang_graph_state/services/explanation.py</code>. The node files build a
+          <code>PlanExplanationRequest</code> from state and pass it to <code>ExplanationService</code>, which owns
+          all prompt assembly and LLM orchestration.
         </p>
         <div class="callout">
           <p>

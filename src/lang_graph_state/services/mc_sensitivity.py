@@ -1,13 +1,9 @@
-import logging
-from time import perf_counter
-
 import numpy as np
 from langchain_core.tools import tool
 
 from lang_graph_state.domain.models import ContributionAllocation, CustomerProfile
+from lang_graph_state.instrumentation.timing import timed
 from lang_graph_state.services.mc_simulator import simulate
-
-logger = logging.getLogger(__name__)
 
 _PROBE_RNG_SEED = 42
 
@@ -84,22 +80,14 @@ def run_default_mc_sensitivity_probes(profile: CustomerProfile, allocation: Cont
     ]
 
 
+@timed("mc_sensitivity_probe", finish_attrs=lambda output: {"output_chars": len(output)})
 def _run_probe(profile: CustomerProfile, allocation: ContributionAllocation, *, label: str) -> str:
-    logger.info("Monte Carlo sensitivity probe start label=%s seed=%s", label, _PROBE_RNG_SEED)
-    started = perf_counter()
     result = simulate(profile, allocation, rng=np.random.default_rng(_PROBE_RNG_SEED))
     dist = result["wealth_distribution"]
     score = result["confidence_score"]
     band = result["confidence_band"]
-    output = (
+    return (
         f"Scenario: {label}\n"
         f"Confidence score: {score:.1%} ({band})\n"
         f"Wealth p10/p50/p90 (today's $): ${dist.p10:,.0f} / ${dist.p50:,.0f} / ${dist.p90:,.0f}"
     )
-    logger.info(
-        "Monte Carlo sensitivity probe finish label=%s elapsed=%.2fs output_chars=%s",
-        label,
-        perf_counter() - started,
-        len(output),
-    )
-    return output

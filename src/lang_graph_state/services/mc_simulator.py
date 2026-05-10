@@ -1,5 +1,3 @@
-import logging
-from time import perf_counter
 from typing import Any
 
 import numpy as np
@@ -11,8 +9,7 @@ from lang_graph_state.domain.models import (
     WealthDistribution,
     classify_confidence,
 )
-
-logger = logging.getLogger(__name__)
+from lang_graph_state.instrumentation.timing import timed
 
 N_PATHS = 1_000
 RETURN_MEAN = 0.07
@@ -27,6 +24,16 @@ def _after_tax_multiplier(acct: str, retirement_tax_rate: float) -> float:
     return 1.0 - retirement_tax_rate
 
 
+@timed(
+    "mc_simulate",
+    finish_attrs=lambda result: {
+        "p10": f"{result['wealth_distribution'].p10:.2f}",
+        "p50": f"{result['wealth_distribution'].p50:.2f}",
+        "p90": f"{result['wealth_distribution'].p90:.2f}",
+        "confidence": f"{result['confidence_score']:.4f}",
+        "band": result["confidence_band"],
+    },
+)
 def simulate(
     profile: CustomerProfile,
     allocation: ContributionAllocation,
@@ -37,14 +44,6 @@ def simulate(
     Run N_PATHS Monte Carlo retirement simulations.
     Returns wealth_distribution (today's dollars), confidence_score, and confidence_band.
     """
-    logger.info(
-        "Monte Carlo start paths=%s age=%s retirement_age=%s retirement_years=%s",
-        N_PATHS,
-        profile.age,
-        profile.retirement_age,
-        profile.retirement_years_to_plan,
-    )
-    started = perf_counter()
     p = profile
     tax_out = p.assumed_retirement_marginal_tax_rate
     accumulation_years = p.years_to_retirement
@@ -93,18 +92,8 @@ def simulate(
     confidence = float(np.mean(retirement_success))
     confidence_band = classify_confidence(confidence)
 
-    result = {
+    return {
         "wealth_distribution": WealthDistribution(p10=float(p10), p50=float(p50), p90=float(p90)),
         "confidence_score": confidence,
         "confidence_band": confidence_band,
     }
-    logger.info(
-        "Monte Carlo finish elapsed=%.2fs p10=%.2f p50=%.2f p90=%.2f confidence=%.4f band=%s",
-        perf_counter() - started,
-        p10,
-        p50,
-        p90,
-        confidence,
-        confidence_band,
-    )
-    return result

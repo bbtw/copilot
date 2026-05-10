@@ -1,3 +1,0 @@
-# Checkpointer added to build_graph() as v1 scaffolding for v2 interrupts
-
-`build_graph()` accepts an optional `checkpointer` parameter even though v1 is a stateless single-pass pipeline that does not use it. LangGraph's human-in-the-loop interrupt mechanism requires a checkpointer at compile time; adding it now as an optional parameter (defaulting to `None`) keeps the v2 migration to a call-site change rather than a signature change across all callers. The v1 `__main__` entry point passes `MemorySaver` to exercise the wired path and confirm the graph compiles correctly with a checkpointer present.

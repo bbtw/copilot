@@ -1,10 +1,9 @@
-import logging
-from time import perf_counter
-
 from lang_graph_state.domain.models import ConfidenceBand, OptimizationDiagnostics, PlanExplanationRequest
+from lang_graph_state.instrumentation.timing import timed
 from lang_graph_state.services.llm import GatewayClient
 
-logger = logging.getLogger(__name__)
+def _output_chars(result: str | None) -> dict[str, int]:
+    return {"output_chars": len(result or "")}
 
 _STANDARD_SYSTEM = (
     "You are a certified financial planner giving a client an overview of their retirement savings plan. "
@@ -61,42 +60,27 @@ class ExplanationService:
     def __init__(self, llm: GatewayClient | None = None) -> None:
         self._llm = llm or GatewayClient()
 
+    @timed("standard_analysis", finish_attrs=_output_chars)
     def standard_analysis(self, request: PlanExplanationRequest) -> str:
-        logger.info("Standard explanation prompt build start")
         prompt = self._build_standard_prompt(request)
-        logger.info("Standard explanation prompt built chars=%s", len(prompt))
-        started = perf_counter()
-        result = self._llm.complete(prompt, system=_STANDARD_SYSTEM)
-        logger.info("Standard explanation complete elapsed=%.2fs output_chars=%s", perf_counter() - started, len(result or ""))
-        return result
+        return self._llm.complete(prompt, system=_STANDARD_SYSTEM)
 
+    @timed("astandard_analysis", finish_attrs=_output_chars)
     async def astandard_analysis(self, request: PlanExplanationRequest) -> str:
-        logger.info("Standard explanation prompt build start")
         prompt = self._build_standard_prompt(request)
-        logger.info("Standard explanation prompt built chars=%s", len(prompt))
-        started = perf_counter()
-        result = await self._llm.acomplete(prompt, system=_STANDARD_SYSTEM)
-        logger.info("Standard explanation complete elapsed=%.2fs output_chars=%s", perf_counter() - started, len(result or ""))
-        return result
+        return await self._llm.acomplete(prompt, system=_STANDARD_SYSTEM)
 
+    @timed("aaccumulation_analysis", finish_attrs=_output_chars)
     async def aaccumulation_analysis(self, request: PlanExplanationRequest, probe_results: list[str]) -> str:
-        logger.info("Accumulation explanation prompt build start probe_count=%s", len(probe_results))
         prompt = self._build_accumulation_prompt(request, probe_results)
-        logger.info("Accumulation explanation prompt built chars=%s", len(prompt))
-        started = perf_counter()
-        result = await self._llm.acomplete(prompt, system=_ACCUMULATION_SYSTEM, max_tokens=1536)
-        logger.info("Accumulation explanation complete elapsed=%.2fs output_chars=%s", perf_counter() - started, len(result or ""))
-        return result
+        return await self._llm.acomplete(prompt, system=_ACCUMULATION_SYSTEM, max_tokens=1536)
 
+    @timed("awithdrawal_analysis", finish_attrs=_output_chars)
     async def awithdrawal_analysis(self, request: PlanExplanationRequest, probe_results: list[str]) -> str:
-        logger.info("Withdrawal explanation prompt build start probe_count=%s", len(probe_results))
         prompt = self._build_withdrawal_prompt(request, probe_results)
-        logger.info("Withdrawal explanation prompt built chars=%s", len(prompt))
-        started = perf_counter()
-        result = await self._llm.acomplete(prompt, system=_WITHDRAWAL_SYSTEM, max_tokens=1536)
-        logger.info("Withdrawal explanation complete elapsed=%.2fs output_chars=%s", perf_counter() - started, len(result or ""))
-        return result
+        return await self._llm.acomplete(prompt, system=_WITHDRAWAL_SYSTEM, max_tokens=1536)
 
+    @timed("synthesize", finish_attrs=_output_chars)
     def synthesize(
         self,
         standard: str,
@@ -104,20 +88,10 @@ class ExplanationService:
         withdrawal: str,
         confidence_band: ConfidenceBand,
     ) -> str:
-        logger.info(
-            "Synthesis prompt build start standard_chars=%s accumulation_chars=%s withdrawal_chars=%s confidence_band=%s",
-            len(standard),
-            len(accumulation),
-            len(withdrawal),
-            confidence_band,
-        )
         prompt = self._build_synthesis_prompt(standard, accumulation, withdrawal, confidence_band)
-        logger.info("Synthesis prompt built chars=%s", len(prompt))
-        started = perf_counter()
-        result = self._llm.complete(prompt, system=_SYNTHESIS_SYSTEM, max_tokens=1536)
-        logger.info("Synthesis complete elapsed=%.2fs output_chars=%s", perf_counter() - started, len(result or ""))
-        return result
+        return self._llm.complete(prompt, system=_SYNTHESIS_SYSTEM, max_tokens=1536)
 
+    @timed("asynthesize", finish_attrs=_output_chars)
     async def asynthesize(
         self,
         standard: str,
@@ -125,19 +99,8 @@ class ExplanationService:
         withdrawal: str,
         confidence_band: ConfidenceBand,
     ) -> str:
-        logger.info(
-            "Synthesis prompt build start standard_chars=%s accumulation_chars=%s withdrawal_chars=%s confidence_band=%s",
-            len(standard),
-            len(accumulation),
-            len(withdrawal),
-            confidence_band,
-        )
         prompt = self._build_synthesis_prompt(standard, accumulation, withdrawal, confidence_band)
-        logger.info("Synthesis prompt built chars=%s", len(prompt))
-        started = perf_counter()
-        result = await self._llm.acomplete(prompt, system=_SYNTHESIS_SYSTEM, max_tokens=1536)
-        logger.info("Synthesis complete elapsed=%.2fs output_chars=%s", perf_counter() - started, len(result or ""))
-        return result
+        return await self._llm.acomplete(prompt, system=_SYNTHESIS_SYSTEM, max_tokens=1536)
 
     def _build_standard_prompt(self, request: PlanExplanationRequest) -> str:
         p = request.customer_profile

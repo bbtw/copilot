@@ -1,12 +1,8 @@
-import logging
-from time import perf_counter
-
 from langchain_core.tools import tool
 
 from lang_graph_state.domain.models import CustomerProfile
+from lang_graph_state.instrumentation.timing import timed
 from lang_graph_state.services.lp_solver import solve_lp
-
-logger = logging.getLogger(__name__)
 
 
 def make_lp_sensitivity_tools(profile: CustomerProfile) -> list:
@@ -67,24 +63,16 @@ def run_default_lp_sensitivity_probes(profile: CustomerProfile) -> list[str]:
     ]
 
 
+@timed("lp_sensitivity_probe", finish_attrs=lambda output: {"output_chars": len(output)})
 def _run_probe(profile: CustomerProfile, *, label: str) -> str:
-    logger.info("LP sensitivity probe start label=%s", label)
-    started = perf_counter()
     result = solve_lp(profile)
     alloc = result["contribution_allocation"]
     wealth = result["projected_wealth"]
     pre50 = ", ".join(f"{k}=${v:,.0f}" for k, v in alloc.pre50.items() if v > 0)
     post50 = ", ".join(f"{k}=${v:,.0f}" for k, v in alloc.post50.items() if v > 0)
-    output = (
+    return (
         f"Scenario: {label}\n"
         f"Projected after-tax wealth: ${wealth:,.0f}\n"
         f"Pre-50 allocation: {pre50 or 'none'}\n"
         f"Post-50 allocation: {post50 or 'none'}"
     )
-    logger.info(
-        "LP sensitivity probe finish label=%s elapsed=%.2fs output_chars=%s",
-        label,
-        perf_counter() - started,
-        len(output),
-    )
-    return output
