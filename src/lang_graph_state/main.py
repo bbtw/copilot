@@ -15,11 +15,11 @@ from lang_graph_state.nodes.lp_optimizer import run_lp_optimizer
 from lang_graph_state.nodes.monte_carlo import run_monte_carlo
 from lang_graph_state.nodes.sections import build_section_a_node, build_section_b_node, build_section_c_node
 from lang_graph_state.nodes.synthesize_explanation import build_synthesize_explanation_node
-from lang_graph_state.services.explanation import ExplanationService
+from lang_graph_state.services.gateway import GatewayClient
 
 
 def build_graph(
-    explanation_service: ExplanationService,
+    client: GatewayClient,
     *,
     checkpointer: BaseCheckpointSaver | None = None,
 ) -> CompiledStateGraph:
@@ -29,11 +29,11 @@ def build_graph(
     graph.add_node("run_lp_optimizer", run_lp_optimizer)
     graph.add_node("run_monte_carlo", run_monte_carlo)
 
-    graph.add_node("run_section_a", build_section_a_node(explanation_service))
-    graph.add_node("run_section_b", build_section_b_node(explanation_service))
-    graph.add_node("run_section_c", build_section_c_node(explanation_service))
+    graph.add_node("run_section_a", build_section_a_node(client))
+    graph.add_node("run_section_b", build_section_b_node(client))
+    graph.add_node("run_section_c", build_section_c_node(client))
 
-    graph.add_node("synthesize_explanation", build_synthesize_explanation_node(explanation_service))
+    graph.add_node("synthesize_explanation", build_synthesize_explanation_node(client))
     graph.add_node("format_output", format_output)
 
     graph.add_edge(START, "load_profile")
@@ -59,7 +59,7 @@ async def amain() -> None:
     from langgraph.checkpoint.memory import MemorySaver
 
     configure_logging()
-    app = build_graph(ExplanationService(), checkpointer=MemorySaver())
+    app = build_graph(GatewayClient(), checkpointer=MemorySaver())
     await app.ainvoke({}, config=build_invoke_config(thread_id=str(uuid.uuid4())))
 
 

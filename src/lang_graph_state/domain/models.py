@@ -27,10 +27,6 @@ class AnalysisSection(BaseModel):
     content: str
 
 
-class AnalysisPayload(BaseModel):
-    pass
-
-
 class FinalOutput(BaseModel):
     explanation: str = ""
 
