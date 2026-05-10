@@ -1,7 +1,8 @@
 import pytest
-from models import CustomerProfile, ACCOUNT_TYPES
-from nodes.lp_optimizer import run_lp_optimizer, compute_roth_ira_limit, IRS_LIMITS
-from state import RetirementPlanState
+from lang_graph_state.domain.models import CustomerProfile, ACCOUNT_TYPES
+from lang_graph_state.nodes.lp_optimizer import run_lp_optimizer
+from lang_graph_state.services.lp_solver import compute_roth_ira_limit, IRS_LIMITS
+from lang_graph_state.domain.state import RetirementPlanState
 
 
 def _profile(**overrides) -> CustomerProfile:

@@ -217,6 +217,30 @@ main {
 .tool-name { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10.5px; color: #C4B5FD; font-weight: 500; }
 .tool-desc { font-size: 11px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
 
+.nd-lgtype {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--muted); margin-bottom: 10px;
+}
+.nd-lgtype span { color: var(--text); font-weight: 600; text-transform: none; letter-spacing: 0; }
+
+pre.wiring {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 10.5px;
+  line-height: 1.7;
+  color: #94A3B8;
+  background: #0A0C12;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre;
+}
+pre.wiring .kw  { color: #818CF8; }
+pre.wiring .fn  { color: #38BDF8; }
+pre.wiring .str { color: #86EFAC; }
+pre.wiring .cm  { color: #475569; font-style: italic; }
+
 /* State inspector */
 .state-row {
   display: flex; align-items: center; gap: 8px;
@@ -251,7 +275,7 @@ main {
     <div class="legend">
       <div class="legend-item"><div class="legend-swatch" style="background:#1E3A5F;border:1.5px solid #3B82F6"></div>Data Gathering</div>
       <div class="legend-item"><div class="legend-swatch" style="background:#1E1B4B;border:1.5px solid #6366F1"></div>LLM Completion</div>
-      <div class="legend-item"><div class="legend-swatch" style="background:#2D1B4E;border:1.5px solid #8B5CF6"></div>ReAct Agent</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#2D1B4E;border:1.5px solid #8B5CF6"></div>Probe + LLM</div>
       <div class="legend-item"><div class="legend-swatch" style="background:#2A1A4E;border:1.5px solid #A855F7"></div>Synthesis</div>
       <div class="legend-item"><div class="legend-swatch" style="background:#1C2333;border:1.5px solid #475569"></div>Output Assembly</div>
     </div>
@@ -309,7 +333,7 @@ const NODE_STYLE = {
   terminal: { fill: '#111827', stroke: '#374151', label2: null },
   data:     { fill: '#1E3A5F', stroke: '#3B82F6', label2: 'Data Gathering' },
   llm:      { fill: '#1E1B4B', stroke: '#6366F1', label2: 'LLM Completion' },
-  agent:    { fill: '#2D1B4E', stroke: '#8B5CF6', label2: 'ReAct Agent' },
+  agent:    { fill: '#2D1B4E', stroke: '#8B5CF6', label2: 'Probe + LLM' },
   synth:    { fill: '#2A1A4E', stroke: '#A855F7', label2: 'Synthesis LLM' },
   output:   { fill: '#1C2333', stroke: '#475569', label2: 'Output Assembly' },
 };
@@ -319,91 +343,91 @@ const NODE_STYLE = {
 const DETAILS = {
   load_profile: {
     name: 'load_customer_profile',
-    file: 'nodes/load_profile.py',
-    badge: 'Data Gathering', badgeClass: 'badge-data',
-    desc: 'Constructs a mocked CustomerProfile — age 42, income $120k, retiring at 65, HDHP enrolled. In production this node is replaced by a real customer data API call; the node signature (state in → dict out) stays the same.',
-    reads: ['(empty state)'],
+    file: 'src/lang_graph_state/nodes/load_profile.py',
+    badge: 'Plain Function', badgeClass: 'badge-output',
+    lgType: 'Plain function node — no LLM, no tools',
+    desc: 'The simplest LangGraph node type: a plain Python callable that receives the full state and returns a partial dict. LangGraph merges the returned dict into the shared TypedDict before advancing the edge. Stand-in for a real customer data API; the node signature (state in → dict out) is identical in production.',
+    wiring: '<span class="cm"># main.py — node registration</span>\ngraph.<span class="fn">add_node</span>(<span class="str">"load_customer_profile"</span>, load_customer_profile)\ngraph.<span class="fn">add_edge</span>(START, <span class="str">"load_customer_profile"</span>)\ngraph.<span class="fn">add_edge</span>(<span class="str">"load_customer_profile"</span>, <span class="str">"run_lp_optimizer"</span>)',
+    reads: ['(none — entry node)'],
     writes: ['customer_profile'],
-    tools: null,
     stateAfter: ['customer_profile'],
   },
   lp_optimizer: {
     name: 'run_lp_optimizer',
-    file: 'nodes/lp_optimizer.py',
-    badge: 'cvxpy LP Solver', badgeClass: 'badge-data',
-    desc: 'Runs a cvxpy linear program that maximizes after-tax projected wealth. Solves for two contribution vectors — pre-50 and post-50 — across 6 account types (401k, Roth 401k, Traditional IRA, Roth IRA, HSA, taxable brokerage). Employer match is modeled as a piecewise-linear subsidy in the objective. Roth IRA phase-outs are preprocessed before the LP runs. Returns full optimizer diagnostics including binding constraints and reduced-cost signals.',
+    file: 'src/lang_graph_state/nodes/lp_optimizer.py',
+    badge: 'Stand-in Tool', badgeClass: 'badge-data',
+    lgType: 'Plain function node — stand-in for production solver',
+    desc: 'Runs a cvxpy LP solver and writes three fields to state. As a LangGraph node it is structurally identical to any other function node — just a callable. The LP internals are replaceable without touching the graph; only the state keys it writes to matter to downstream nodes.',
+    wiring: '<span class="cm"># main.py — sequential spine</span>\ngraph.<span class="fn">add_node</span>(<span class="str">"run_lp_optimizer"</span>, run_lp_optimizer)\ngraph.<span class="fn">add_edge</span>(<span class="str">"load_customer_profile"</span>, <span class="str">"run_lp_optimizer"</span>)\ngraph.<span class="fn">add_edge</span>(<span class="str">"run_lp_optimizer"</span>, <span class="str">"run_monte_carlo"</span>)',
     reads: ['customer_profile'],
     writes: ['contribution_allocation', 'projected_wealth', 'optimization_diagnostics'],
-    tools: null,
     stateAfter: ['customer_profile', 'contribution_allocation', 'projected_wealth', 'optimization_diagnostics'],
   },
   monte_carlo: {
     name: 'run_monte_carlo',
-    file: 'nodes/monte_carlo.py',
-    badge: '1,000-Path Simulation', badgeClass: 'badge-data',
-    desc: 'Simulates 1,000 retirement paths with stochastic market returns (μ=7%, σ=15%) and inflation (μ=3%, σ=1%). Phase 1 accumulates wealth over working years adding LP contributions and employer match. Phase 2 simulates annual drawdown in retirement. Confidence score = fraction of paths where assets survive the full retirement horizon. Wealth distribution is reported in today\'s dollars (inflation-deflated). RNG is injected at build time — tests pass a seeded generator for determinism.',
+    file: 'src/lang_graph_state/nodes/monte_carlo.py',
+    badge: 'Stand-in Tool', badgeClass: 'badge-data',
+    lgType: 'Plain function node — triggers the fan-out',
+    desc: 'Stand-in simulation node. Its graph role is more important than its internals: it is the last sequential node before the fan-out. Once it returns, LangGraph sees three outgoing edges and schedules run_standard_analysis, run_accumulation_agent, and run_withdrawal_agent to execute concurrently. The parallelism comes entirely from the graph wiring — not from anything inside this node.',
+    wiring: '<span class="cm"># main.py — fan-out: three edges from one node</span>\n<span class="cm"># LangGraph runs all three branches simultaneously</span>\ngraph.<span class="fn">add_edge</span>(<span class="str">"run_monte_carlo"</span>, <span class="str">"run_standard_analysis"</span>)\ngraph.<span class="fn">add_edge</span>(<span class="str">"run_monte_carlo"</span>, <span class="str">"run_accumulation_agent"</span>)\ngraph.<span class="fn">add_edge</span>(<span class="str">"run_monte_carlo"</span>, <span class="str">"run_withdrawal_agent"</span>)',
     reads: ['customer_profile', 'contribution_allocation'],
     writes: ['wealth_distribution', 'confidence_score', 'confidence_band'],
-    tools: null,
     stateAfter: ['customer_profile', 'contribution_allocation', 'projected_wealth', 'optimization_diagnostics', 'wealth_distribution', 'confidence_score', 'confidence_band'],
   },
   std_analysis: {
     name: 'run_standard_analysis',
-    file: 'nodes/standard_analysis.py',
-    badge: 'LLM Completion', badgeClass: 'badge-llm',
-    desc: 'Simple LLM completion — no tools, no loop. Produces a 2-3 paragraph plain-English overview of the plan: what the optimizer recommended and why, and how the Monte Carlo scored it. Prompt is assembled by ExplanationService.standard_analysis() and sent via GatewayClient. Runs in parallel with the two agent nodes after Monte Carlo completes.',
-    reads: ['customer_profile', 'contribution_allocation', 'projected_wealth', 'wealth_distribution', 'confidence_score', 'confidence_band', 'optimization_diagnostics'],
-    writes: ['standard_analysis'],
-    tools: null,
-    stateAfter: ['customer_profile', 'contribution_allocation', 'projected_wealth', 'optimization_diagnostics', 'wealth_distribution', 'confidence_score', 'confidence_band', 'standard_analysis'],
+    file: 'src/lang_graph_state/nodes/standard_analysis.py',
+    badge: 'LLM Call', badgeClass: 'badge-llm',
+    lgType: 'LLM completion node — parallel branch 1 of 3',
+    desc: 'A single LLM call with no tools and no loop — the simplest way to add AI to a LangGraph node. Runs concurrently with run_accumulation_agent and run_withdrawal_agent because all three share run_monte_carlo as their only incoming edge. LangGraph dispatches them in parallel; no extra threading code is needed. Returns one PlanAnalysisSection to state.',
+    wiring: '<span class="cm"># nodes/standard_analysis.py — builder pattern</span>\n<span class="kw">def</span> <span class="fn">build_standard_analysis_node</span>(svc):\n    <span class="kw">def</span> <span class="fn">run</span>(state):\n        text = svc.<span class="fn">standard_analysis</span>(state)\n        <span class="kw">return</span> {<span class="str">"analysis_sections"</span>: [<span class="fn">PlanAnalysisSection</span>(kind=<span class="str">"standard"</span>, content=text)]}\n    <span class="kw">return</span> run\n\n<span class="cm"># main.py</span>\ngraph.<span class="fn">add_node</span>(<span class="str">"run_standard_analysis"</span>, <span class="fn">build_standard_analysis_node</span>(svc))',
+    reads: ['customer_profile', 'contribution_allocation', 'projected_wealth', 'confidence_score', 'confidence_band'],
+    writes: ['analysis_sections[kind=standard]'],
+    stateAfter: ['customer_profile', 'contribution_allocation', 'projected_wealth', 'optimization_diagnostics', 'wealth_distribution', 'confidence_score', 'confidence_band', 'analysis_sections'],
   },
   accum_agent: {
     name: 'run_accumulation_agent',
-    file: 'nodes/accumulation_agent.py',
-    badge: 'ReAct Agent', badgeClass: 'badge-agent',
-    desc: 'A create_react_agent subgraph with LP sensitivity probe tools. The agent analyzes the accumulation phase — contribution sequencing, employer match leverage, the two-phase pre-50/post-50 allocation shift, and binding constraints. It calls its tools to probe 2-3 key scenarios before writing its structured analysis to state. Runs in parallel with standard_analysis and run_withdrawal_agent.',
+    file: 'src/lang_graph_state/nodes/analysis_agents.py',
+    badge: 'Probe + LLM', badgeClass: 'badge-agent',
+    lgType: 'Gateway-backed analysis node — LP probes, parallel branch 2 of 3',
+    desc: 'Runs deterministic LP sensitivity probes from the current state, then sends the assembled accumulation prompt through ExplanationService. The node returns one PlanAnalysisSection and runs concurrently with the other two analysis nodes — LangGraph does not wait for it before starting the others.',
+    wiring: '<span class="cm"># nodes/analysis_agents.py — probe + gateway pattern</span>\n<span class="kw">def</span> <span class="fn">_build_analysis_node</span>(*, service_call, build_probes, analysis_kind):\n    <span class="kw">async def</span> <span class="fn">run_analysis</span>(state):\n        request = <span class="fn">_request_from_state</span>(state)\n        probe_results = <span class="fn">build_probes</span>(state)\n        content = <span class="kw">await</span> <span class="fn">service_call</span>(request, probe_results)\n        <span class="kw">return</span> {<span class="str">"analysis_sections"</span>: [<span class="fn">PlanAnalysisSection</span>(kind=analysis_kind, content=content)]}\n    <span class="kw">return</span> run_analysis',
     reads: ['customer_profile', 'contribution_allocation', 'projected_wealth', 'optimization_diagnostics'],
-    writes: ['accumulation_analysis'],
-    tools: [
-      { name: 'probe_savings_capacity_delta', desc: 'Re-runs LP with lower annual expenses → measures wealth gain from higher savings rate' },
-      { name: 'probe_retirement_age_shift',   desc: 'Re-runs LP with a later retirement age → measures compounding benefit of more accumulation years' },
-      { name: 'probe_employer_match_cap',     desc: 'Re-runs LP with a changed match cap rate → measures how much free match money is on the table' },
-    ],
-    stateAfter: ['customer_profile', 'contribution_allocation', 'projected_wealth', 'optimization_diagnostics', 'wealth_distribution', 'confidence_score', 'confidence_band', 'accumulation_analysis'],
+    writes: ['analysis_sections[kind=accumulation]'],
+    stateAfter: ['customer_profile', 'contribution_allocation', 'projected_wealth', 'optimization_diagnostics', 'wealth_distribution', 'confidence_score', 'confidence_band', 'analysis_sections'],
   },
   with_agent: {
     name: 'run_withdrawal_agent',
-    file: 'nodes/withdrawal_agent.py',
-    badge: 'ReAct Agent', badgeClass: 'badge-agent',
-    desc: 'A create_react_agent subgraph with MC sensitivity probe tools. The agent analyzes the decumulation phase — portfolio sustainability, sequence-of-returns risk, and expense sensitivity. It probes how the confidence score changes under different retirement spending and duration scenarios before writing its structured analysis to state. Runs in parallel with the other two analysis nodes.',
+    file: 'src/lang_graph_state/nodes/analysis_agents.py',
+    badge: 'Probe + LLM', badgeClass: 'badge-agent',
+    lgType: 'Gateway-backed analysis node — MC probes, parallel branch 3 of 3',
+    desc: 'Same structure as run_accumulation_agent, but it runs Monte Carlo sensitivity probes instead of LP probes. Text generation still goes through ExplanationService and GatewayClient. Runs concurrently in the third parallel branch.',
+    wiring: '<span class="cm"># main.py — both analysis nodes share the graph service</span>\ngraph.<span class="fn">add_node</span>(<span class="str">"run_accumulation_agent"</span>, <span class="fn">build_accumulation_node</span>(svc))\ngraph.<span class="fn">add_node</span>(<span class="str">"run_withdrawal_agent"</span>,  <span class="fn">build_withdrawal_node</span>(svc))\n\n<span class="cm"># fan-in: LangGraph waits for all three before firing synthesize</span>\ngraph.<span class="fn">add_edge</span>(<span class="str">"run_standard_analysis"</span>,   <span class="str">"synthesize_explanation"</span>)\ngraph.<span class="fn">add_edge</span>(<span class="str">"run_accumulation_agent"</span>, <span class="str">"synthesize_explanation"</span>)\ngraph.<span class="fn">add_edge</span>(<span class="str">"run_withdrawal_agent"</span>,  <span class="str">"synthesize_explanation"</span>)',
     reads: ['customer_profile', 'contribution_allocation', 'wealth_distribution', 'confidence_score', 'confidence_band'],
-    writes: ['withdrawal_analysis'],
-    tools: [
-      { name: 'probe_retirement_expense_delta',       desc: 'Reruns MC with higher/lower retirement expenses → measures confidence score sensitivity to spending' },
-      { name: 'probe_retirement_duration_extension',  desc: 'Reruns MC with a longer planning horizon → measures longevity risk' },
-      { name: 'probe_net_withdrawal_rate',            desc: 'Reruns MC at a specified annual portfolio withdrawal → finds the sustainable withdrawal level' },
-    ],
-    stateAfter: ['customer_profile', 'contribution_allocation', 'projected_wealth', 'optimization_diagnostics', 'wealth_distribution', 'confidence_score', 'confidence_band', 'withdrawal_analysis'],
+    writes: ['analysis_sections[kind=withdrawal]'],
+    stateAfter: ['customer_profile', 'contribution_allocation', 'projected_wealth', 'optimization_diagnostics', 'wealth_distribution', 'confidence_score', 'confidence_band', 'analysis_sections'],
   },
   synthesize: {
     name: 'synthesize_explanation',
-    file: 'nodes/synthesize_explanation.py',
-    badge: 'Synthesis LLM', badgeClass: 'badge-synth',
-    desc: 'The fourth LLM call — fans in from all three parallel analyses. Receives standard_analysis, accumulation_analysis, withdrawal_analysis, and confidence_band, then weaves them into a single coherent 4-5 paragraph client-facing explanation. The confidence band shapes tone: high = emphasize strategy strength; medium = balanced with uncertainty; low = honest about retirement-readiness risk and suggest levers. No tools; pure synthesis via ExplanationService.synthesize().',
-    reads: ['standard_analysis', 'accumulation_analysis', 'withdrawal_analysis', 'confidence_band'],
+    file: 'src/lang_graph_state/nodes/synthesize_explanation.py',
+    badge: 'LLM Call', badgeClass: 'badge-synth',
+    lgType: 'LLM completion node — fan-in point, 4th LLM call',
+    desc: 'The fan-in node. LangGraph holds this node until all three incoming edges have delivered their state updates — it fires only once all three PlanAnalysisSection values are merged. Then it makes a single LLM call to weave them into a coherent client-facing explanation. No tools; pure synthesis. The confidence_band field shapes tone (high / medium / low).',
+    wiring: '<span class="cm"># main.py — fan-in: three edges converge here</span>\n<span class="cm"># LangGraph waits for all three before dispatching this node</span>\ngraph.<span class="fn">add_edge</span>(<span class="str">"run_standard_analysis"</span>,   <span class="str">"synthesize_explanation"</span>)\ngraph.<span class="fn">add_edge</span>(<span class="str">"run_accumulation_agent"</span>, <span class="str">"synthesize_explanation"</span>)\ngraph.<span class="fn">add_edge</span>(<span class="str">"run_withdrawal_agent"</span>,  <span class="str">"synthesize_explanation"</span>)\ngraph.<span class="fn">add_edge</span>(<span class="str">"synthesize_explanation"</span>, <span class="str">"format_output"</span>)',
+    reads: ['analysis_sections', 'confidence_band'],
     writes: ['explanation'],
-    tools: null,
-    stateAfter: ['customer_profile', 'contribution_allocation', 'projected_wealth', 'optimization_diagnostics', 'wealth_distribution', 'confidence_score', 'confidence_band', 'standard_analysis', 'accumulation_analysis', 'withdrawal_analysis', 'explanation'],
+    stateAfter: ['customer_profile', 'contribution_allocation', 'projected_wealth', 'optimization_diagnostics', 'wealth_distribution', 'confidence_score', 'confidence_band', 'analysis_sections', 'explanation'],
   },
   format_output: {
     name: 'format_output',
-    file: 'nodes/format_output.py',
-    badge: 'Deterministic', badgeClass: 'badge-output',
-    desc: 'Pure deterministic assembly — no LLM, no tools. Packs all accumulated state into a RetirementPlanResult struct (contribution_allocation, projected_wealth, wealth_distribution, confidence_score, confidence_band, explanation, optimization_diagnostics). Includes a print_summary() helper for human-readable terminal output.',
+    file: 'src/lang_graph_state/nodes/format_output.py',
+    badge: 'Plain Function', badgeClass: 'badge-output',
+    lgType: 'Plain function node — terminal, no LLM',
+    desc: 'Pure deterministic assembly — no LLM, no tools. Packs all accumulated state fields into a RetirementPlanResult struct and writes it to state. After this node completes LangGraph advances to END. The simplest exit node pattern: read everything, return one key.',
+    wiring: '<span class="cm"># main.py — terminal sequence</span>\ngraph.<span class="fn">add_node</span>(<span class="str">"format_output"</span>, format_output)\ngraph.<span class="fn">add_edge</span>(<span class="str">"synthesize_explanation"</span>, <span class="str">"format_output"</span>)\ngraph.<span class="fn">add_edge</span>(<span class="str">"format_output"</span>, END)',
     reads: ['All accumulated state fields'],
     writes: ['result'],
-    tools: null,
-    stateAfter: ['customer_profile', 'contribution_allocation', 'projected_wealth', 'optimization_diagnostics', 'wealth_distribution', 'confidence_score', 'confidence_band', 'standard_analysis', 'accumulation_analysis', 'withdrawal_analysis', 'explanation', 'result'],
+    stateAfter: ['customer_profile', 'contribution_allocation', 'projected_wealth', 'optimization_diagnostics', 'wealth_distribution', 'confidence_score', 'confidence_band', 'analysis_sections', 'explanation', 'result'],
   },
 };
 
@@ -417,9 +441,7 @@ const ALL_STATE_FIELDS = [
   { name: 'wealth_distribution',      src: 'run_monte_carlo' },
   { name: 'confidence_score',         src: 'run_monte_carlo' },
   { name: 'confidence_band',          src: 'run_monte_carlo' },
-  { name: 'standard_analysis',        src: 'run_standard_analysis' },
-  { name: 'accumulation_analysis',    src: 'run_accumulation_agent' },
-  { name: 'withdrawal_analysis',      src: 'run_withdrawal_agent' },
+  { name: 'analysis_sections',        src: 'parallel_analysis_branches' },
   { name: 'explanation',              src: 'synthesize_explanation' },
   { name: 'result',                   src: 'format_output' },
 ];
@@ -551,7 +573,7 @@ function selectNode(id) {
   if (!d) return;
 
   const card = document.getElementById('detailCard');
-  const isAgent = d.tools && d.tools.length > 0;
+  const isAgent = d.badgeClass === 'badge-agent';
   const writeClass = isAgent ? 'write violet' : 'write';
 
   card.innerHTML = `
@@ -561,7 +583,13 @@ function selectNode(id) {
       <span class="nd-badge ${d.badgeClass}">${d.badge}</span>
     </div>
     <div class="nd-file">${d.file}</div>
+    ${d.lgType ? `<div class="nd-lgtype">LangGraph type: <span>${d.lgType}</span></div>` : ''}
     <div class="nd-desc">${d.desc}</div>
+    ${d.wiring ? `
+    <div class="io-section">
+      <div class="io-label">Graph Wiring</div>
+      <pre class="wiring">${d.wiring}</pre>
+    </div>` : ''}
     <div class="io-section">
       <div class="io-label">Reads from State</div>
       <div class="tags">${d.reads.map(f => `<span class="tag">${f}</span>`).join('')}</div>
@@ -570,21 +598,6 @@ function selectNode(id) {
       <div class="io-label">Writes to State</div>
       <div class="tags">${d.writes.map(f => `<span class="tag ${writeClass}">${f}</span>`).join('')}</div>
     </div>
-    ${isAgent ? `
-    <div class="io-section">
-      <div class="io-label">Tools Available</div>
-      <div class="tools-list">
-        ${d.tools.map(t => `
-          <div class="tool-row">
-            <div class="tool-icon">⚙</div>
-            <div>
-              <div class="tool-name">${t.name}</div>
-              <div class="tool-desc">${t.desc}</div>
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    </div>` : ''}
   `;
 
   // Update state inspector to show what's available after this node

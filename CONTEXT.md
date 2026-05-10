@@ -69,10 +69,8 @@ Customer-facing output may show this distribution as secondary evidence for the 
 The probability that the plan can fund `RetirementAnnualExpenses` for `RetirementYearsToPlan` years after the customer's retirement age without assets being exhausted before the end of the planned retirement horizon. The Monte Carlo processor owns this calculation and returns the score; it answers "how likely is this customer to have enough money to retire under the simulated paths?"
 
 **ConfidenceBand**
-An internal explanation-routing category returned by `MonteCarloProjection` and derived from `ConfidenceScore`; canonical values are `low`, `medium`, and `high`. The band may shape graph routing and prompt strategy, but client-facing explanations should translate it into softer projection-risk language rather than presenting the raw band label as a plan quality judgment.
-_Avoid_: Customer-facing headline labels like "low confidence plan"
-
-Confidence-specific explanation routes are part of the graph story. Route-specific node wrappers must fail fast if the routed confidence policy disagrees with the `ConfidenceBand` in state; this indicates graph wiring or state mutation is wrong, not a recoverable customer scenario.
+A data field derived from `ConfidenceScore` by `classify_confidence()` in `src/lang_graph_state/domain/models.py`; canonical values are `low`, `medium`, and `high`. Passed as an input to the synthesis LLM call to shape tone — not used to branch the graph. Client-facing explanations should translate it into softer projection-risk language rather than presenting the raw band label as a plan quality judgment.
+_Avoid_: Customer-facing headline labels like "low confidence plan"; conditional graph edges based on this field
 
 Initial thresholds:
 - `low`: `ConfidenceScore < 70%`
@@ -132,36 +130,40 @@ The service-level contract consumed by `ExplanationService` to generate a client
 _Avoid_: Passing raw `RetirementPlanState` into explanation services or coupling explanation generation to LangGraph state shape
 
 **LPSensitivityProbe**
-A tool available to the `AccumulationAnalysisAgent`. Performs a fast read-only partial evaluation of how the LP result changes under a perturbed input (savings capacity delta, retirement age shift, or employer match cap change). Does not rerun the full LP solver; returns a structured sensitivity result for the agent to reason over.
-_Avoid_: Full LP reruns inside sensitivity probes; sharing LP implementation code with the production optimizer
+A local calculation used by the accumulation analysis branch. Reruns the LP solver (`src/lang_graph_state/services/lp_solver.py`) with a perturbed copy of the customer profile (savings capacity delta, retirement age shift, or employer match cap change) and returns the delta in projected wealth. Each probe is a full `solve_lp` call on a modified `CustomerProfile`; probes are fast because the LP is cheap to solve locally.
+_Avoid_: Sharing LP implementation code with the production optimizer; mutating the original profile instead of using `model_copy(update={...})`
 
 **MCSensitivityProbe**
-A tool available to the `WithdrawalAnalysisAgent`. Performs a partial Monte Carlo rerun under a perturbed input (annual expense delta, retirement duration extension, or withdrawal rate query). Uses the same RNG seed as the main MC run for comparability. Returns updated `ConfidenceScore` and `WealthDistribution` percentiles.
+A local calculation used by the withdrawal analysis branch. Performs a partial Monte Carlo rerun under a perturbed input (annual expense delta, retirement duration extension, or withdrawal rate query). Uses a fixed RNG seed for comparability across probe calls. Returns updated `ConfidenceScore` and `WealthDistribution` percentiles.
 _Avoid_: Full 1,000-path reruns for every probe invocation; sharing MC implementation code with the production simulator
 
 **StandardPlanAnalysis**
 The plain-English overview produced by the first parallel LLM node. Narrates what the optimizer selected and why, referencing `OptimizationDiagnostics`, and describes the Monte Carlo result at a summary level. No tools; simple LLM completion.
 
+**PlanAnalysisSection**
+One normalized output from a parallel LLM branch. Each section has a `kind` (`standard`, `accumulation`, or `withdrawal`) and `content`. All three parallel branches write `PlanAnalysisSection` values to the shared `analysis_sections` state key, which is merged by an explicit LangGraph reducer.
+_Avoid_: Separate one-off state fields for each branch when the graph is meant to demonstrate concurrent writes to shared state
+
 **AccumulationAnalysisAgent**
-A `create_react_agent` subgraph registered as a single node in the parent graph. Analyzes contribution sequencing, the employer match lever, the two-phase pre-50/post-50 allocation shift, and binding constraints using `LPSensitivityProbe` tools. Produces `accumulation_analysis` — a structured string written to state.
-_Avoid_: Accessing or mutating parent graph state from inside the agent's inner graph
+An async LangGraph node that runs local LP sensitivity probes, then asks `ExplanationService` for gateway-backed accumulation analysis. Analyzes contribution sequencing, the employer match lever, the two-phase pre-50/post-50 allocation shift, and binding constraints. Produces a `PlanAnalysisSection(kind="accumulation")`.
+_Avoid_: Constructing model clients in the node; all LLM access should go through `ExplanationService`
 
 **WithdrawalAnalysisAgent**
-A `create_react_agent` subgraph registered as a single node in the parent graph. Analyzes retirement drawdown sustainability, sequence-of-returns risk, and sensitivity of `ConfidenceScore` to changed spending or duration assumptions using `MCSensitivityProbe` tools. Produces `withdrawal_analysis` — a structured string written to state.
-_Avoid_: Accessing or mutating parent graph state from inside the agent's inner graph
+An async LangGraph node that runs local Monte Carlo sensitivity probes, then asks `ExplanationService` for gateway-backed withdrawal analysis. Analyzes retirement drawdown sustainability, sequence-of-returns risk, and sensitivity of `ConfidenceScore` to changed spending or duration assumptions. Produces a `PlanAnalysisSection(kind="withdrawal")`.
+_Avoid_: Constructing model clients in the node; all LLM access should go through `ExplanationService`
 
 **AnalysisSynthesis**
-The fourth LLM call in the pipeline. Receives `StandardPlanAnalysis`, `AccumulationAnalysis`, `WithdrawalAnalysis`, and `ConfidenceBand` as inputs and produces the single client-facing explanation. No tools; simple LLM completion. Confidence band shapes tone rather than routing.
+The fourth LLM call in the pipeline. Receives the three `PlanAnalysisSection` values and `ConfidenceBand` as inputs and produces the single client-facing explanation. No tools; simple LLM completion. Confidence band shapes tone rather than routing.
 
 **GatewayClient**
-A single concrete class in `services/llm.py` that wraps an OpenAI-format REST API call. Configured via environment variables (base URL, model provider, model ID). Points at the enterprise LLM gateway in production and at Ollama locally — the switch is config-level, not code-level. The OpenAI client is wrapped with `langsmith.wrappers.wrap_openai` at construction time so every LLM call is traced in LangSmith when `LANGCHAIN_TRACING_V2=true`; the wrapper is a no-op when tracing is not configured. Injected into `ExplanationService`; tests mock it at the call site.
-_Avoid_: Provider-specific SDK imports, multiple adapter classes, Protocol or structural-typing indirection, switching logic in application code
+A single concrete class in `src/lang_graph_state/services/llm.py` that wraps an OpenAI-format REST API call. Configured via environment variables (base URL, model provider, model ID). Points at the enterprise LLM gateway in production and at the local FastAPI gateway shim for Ollama-backed development. The async graph path uses `GatewayClient.acomplete()` only through `ExplanationService`; the sync `complete()` method remains for focused service tests and compatibility. The OpenAI clients are wrapped with `langsmith.wrappers.wrap_openai` at construction time so every LLM call is traced in LangSmith when `LANGSMITH_TRACING=true`; the wrapper is a no-op when tracing is not configured. Tests mock it at the call site using `MagicMock(spec=GatewayClient)`.
+_Avoid_: Direct model clients in graph nodes, provider-specific SDK imports outside this module, multiple adapter classes, switching logic in application code
 
 **RetirementPlanResult**
 The final pipeline output: `ContributionAllocation`, `ProjectedWealth`, `WealthDistribution`, `ConfidenceScore`, `ConfidenceBand`, and a plain-English explanation generated by the LLM. Returned as a structured dict with a print helper for human-readable summary.
 
 **RetirementPlanState**
-The accumulated LangGraph state passed through the retirement planning pipeline, containing each node's completed outputs.
+The accumulated LangGraph state passed through the retirement planning pipeline, containing each node's completed outputs. Most fields are single-writer last-value fields. `analysis_sections` is the reducer-backed shared field used by the parallel LLM fan-out.
 
 ## Pipeline (v2)
 
@@ -171,10 +173,10 @@ load_customer_profile
 run_lp_optimizer        ← maximizes after-tax ProjectedWealth; outputs ContributionAllocation
        ↓
 run_monte_carlo         ← outputs WealthDistribution (today's dollars) + ConfidenceScore
-       ↓ (fan-out — three agents run in parallel)
+      ↓ (fan-out — three analyses run in parallel)
 ┌─────────────────────────────────────────────────────────────────┐
 │  run_standard_analysis  │  run_accumulation_agent  │  run_withdrawal_agent  │
-│  (simple LLM)           │  (ReAct + LP tools)      │  (ReAct + MC tools)    │
+│  (gateway LLM)          │  (LP probes + gateway)   │  (MC probes + gateway) │
 └─────────────────────────────────────────────────────────────────┘
        ↓ (fan-in)
 synthesize_explanation  ← fourth LLM call; receives all three analyses + ConfidenceBand
@@ -186,38 +188,46 @@ format_output           ← mechanical assembly; no LLM
 
 ```
 lang-graph-state/
-├── main.py                      ← builds and runs the LangGraph graph
-├── state.py                     ← RetirementPlanState Pydantic model
-├── models.py                    ← CustomerProfile, ContributionAllocation, WealthDistribution, RetirementPlanResult
+├── src/
+│   └── lang_graph_state/
+│       ├── main.py              ← builds and runs the LangGraph graph
+│       ├── instrumentation/
+│       │   ├── nodes.py         ← node timing/logging wrapper
+│       │   └── tracing.py       ← RunnableConfig tags, metadata, and checkpoint thread_id helper
+│       ├── domain/
+│       │   ├── state.py         ← RetirementPlanState Pydantic model + analysis_sections reducer
+│       │   └── models.py        ← domain models: CustomerProfile, ContributionAllocation, PlanAnalysisSection, etc.
+│       ├── services/
+│       │   ├── lp_solver.py     ← LP solve logic; public interface: solve_lp(profile) -> dict
+│       │   ├── mc_simulator.py  ← Monte Carlo simulation; public interface: simulate(profile, allocation) -> dict
+│       │   ├── lp_sensitivity.py ← LP sensitivity probes for accumulation analysis
+│       │   ├── mc_sensitivity.py ← MC sensitivity probes for withdrawal analysis
+│       │   ├── explanation.py   ← prompt assembly and LLM orchestration for all analysis text
+│       │   └── llm.py           ← GatewayClient; OpenAI-format REST API wrapper
+│       └── nodes/
+│           ├── load_profile.py  ← mocked CustomerProfile (42yo, $120k income, HDHP enrolled)
+│           ├── lp_optimizer.py  ← thin wrapper: calls solve_lp(); sets contribution_allocation + projected_wealth + optimization_diagnostics
+│           ├── monte_carlo.py   ← thin wrapper: calls simulate(); sets wealth_distribution + confidence_score + confidence_band
+│           ├── analysis_agents.py ← builds accumulation and withdrawal analysis nodes
+│           ├── standard_analysis.py ← thin wrapper: writes the standard PlanAnalysisSection
+│           ├── synthesize_explanation.py ← thin wrapper: awaits ExplanationService.asynthesize(); sets explanation
+│           └── format_output.py ← assembles RetirementPlanResult from state
 ├── docs/
-│   └── developer-guide.html     ← new-developer teaching guide for graph state flow and boundaries
-├── services/
-│   ├── explanation.py           ← prompt assembly and LLM orchestration for synthesis
-│   ├── llm.py                   ← GatewayClient wrapping OpenAI-format REST API (Ollama locally, enterprise gateway in prod)
-│   ├── lp_sensitivity.py        ← LPSensitivityProbe tools registered with the accumulation agent
-│   └── mc_sensitivity.py        ← MCSensitivityProbe tools registered with the withdrawal agent
-└── nodes/
-    ├── load_profile.py          ← mocked CustomerProfile (42yo, $120k income, HDHP enrolled)
-    ├── lp_optimizer.py          ← cvxpy LP; sets contribution_allocation + projected_wealth
-    ├── monte_carlo.py           ← 1,000-path simulation; sets wealth_distribution + confidence_score + confidence_band
-    ├── standard_analysis.py     ← simple LLM completion; sets standard_analysis
-    ├── accumulation_agent.py    ← create_react_agent subgraph with LP sensitivity tools; sets accumulation_analysis
-    ├── withdrawal_agent.py      ← create_react_agent subgraph with MC sensitivity tools; sets withdrawal_analysis
-    ├── synthesize_explanation.py ← LLM synthesis of three parallel analyses; sets explanation
-    └── format_output.py         ← assembles RetirementPlanResult
+│   └── graph-explorer.html      ← interactive graph flow explorer
+└── tests/
 ```
 
-Each node is a plain function `(state: RetirementPlanState) -> dict[str, Any]`. The graph starts with `app.invoke({})`, so the initial state is empty. Every node reads the attributes it requires from the accumulated Pydantic state object and returns only the keys it produces; LangGraph merges that partial dict into the state before invoking the next node.
+Each node is a callable over `(state: RetirementPlanState) -> dict[str, Any]`. Calculation nodes are sync; LLM-calling nodes are async. The graph starts with `app.ainvoke({})`, so the initial state is empty. Every node reads the attributes it requires from the accumulated Pydantic state object and returns only the keys it produces; LangGraph merges that partial dict into the state before invoking the next node. The three parallel analysis nodes all write `analysis_sections`, so that field uses `merge_analysis_sections` as an explicit reducer.
 
 | Node | Reads | Returns |
 |---|---|---|
 | `load_customer_profile` | initial empty state | `customer_profile` |
 | `run_lp_optimizer` | `customer_profile` | `contribution_allocation`, `projected_wealth`, `optimization_diagnostics` |
 | `run_monte_carlo` | `customer_profile`, `contribution_allocation` | `wealth_distribution`, `confidence_score`, `confidence_band` |
-| `run_standard_analysis` | `customer_profile`, `contribution_allocation`, `projected_wealth`, `wealth_distribution`, `confidence_score`, `confidence_band` | `standard_analysis` |
-| `run_accumulation_agent` | `customer_profile`, `contribution_allocation`, `projected_wealth`, `optimization_diagnostics` | `accumulation_analysis` |
-| `run_withdrawal_agent` | `customer_profile`, `wealth_distribution`, `confidence_score`, `confidence_band` | `withdrawal_analysis` |
-| `synthesize_explanation` | `standard_analysis`, `accumulation_analysis`, `withdrawal_analysis`, `confidence_band` | `explanation` |
+| `run_standard_analysis` | `customer_profile`, `contribution_allocation`, `projected_wealth`, `wealth_distribution`, `confidence_score`, `confidence_band` | `analysis_sections[]` with `kind="standard"` |
+| `run_accumulation_agent` | `customer_profile`, `contribution_allocation`, `projected_wealth`, `optimization_diagnostics` | `analysis_sections[]` with `kind="accumulation"` |
+| `run_withdrawal_agent` | `customer_profile`, `wealth_distribution`, `confidence_score`, `confidence_band` | `analysis_sections[]` with `kind="withdrawal"` |
+| `synthesize_explanation` | `analysis_sections`, `confidence_band` | `explanation` |
 | `format_output` | all prior outputs | `result` |
 
 ## Architecture Decisions
@@ -231,13 +241,15 @@ Each node is a plain function `(state: RetirementPlanState) -> dict[str, Any]`. 
 - **Employer match is modeled as a subsidy** in the objective (piecewise-linear `min`), not a constraint.
 - **Roth IRA phase-outs are input preprocessing**, not LP constraints — collapsed to fixed limits before the LP runs. Traditional IRA deductibility phase-outs are deferred.
 - **MC reports distribution percentiles in today's dollars** by deflating with simulated inflation. Confidence is returned by the Monte Carlo processor as the probability that retirement income and assets cover `RetirementAnnualExpenses` for `RetirementYearsToPlan` years after the customer's retirement age.
-- **Three parallel LLM agents run after Monte Carlo.** The parent graph fans out from `run_monte_carlo` to `run_standard_analysis`, `run_accumulation_agent`, and `run_withdrawal_agent` simultaneously; LangGraph executes them in parallel. Each writes a distinct field to state. A fourth `synthesize_explanation` node fans them back in.
-- **Confidence band is data, not routing.** There are no conditional edges based on `ConfidenceBand`. All three analysis agents always run; the synthesis agent receives `ConfidenceBand` as an input and uses it to shape tone. This replaces the previous `route_by_confidence_band` conditional edge.
-- **Accumulation and withdrawal agents are `create_react_agent` subgraphs.** Each compiles its own inner LangGraph (tool nodes + loop edges) and is registered in the parent graph as a single node. Tools are plain Python functions injected at build time. The parent graph state is isolated from each agent's internal message state.
-- **Accumulation agent tools are LP sensitivity probes** — read-only recalculations of LP outcomes for changed inputs (savings capacity delta, retirement age shift, employer match cap change). No full LP rerun; probes are fast partial evaluations.
-- **Withdrawal agent tools are MC sensitivity probes** — partial MC reruns for changed inputs (annual expense delta, retirement duration extension, withdrawal rate query). Probes use the same RNG seed as the main run for comparability.
-- **Synthesis node receives all three analyses as structured text plus `ConfidenceBand`** and produces the single client-facing explanation. It is a simple LLM completion (no tools, no loop).
-- **LLM accessed through `services.llm`**. The module defines `GatewayClient`, a single concrete class backed by the OpenAI-format REST API. Production points at the enterprise LLM gateway; local development points at Ollama. The switch is config-level (env vars), not code-level. The client is wrapped with `langsmith.wrappers.wrap_openai` so LLM calls appear in LangSmith traces alongside LangGraph node traces — enable with `LANGCHAIN_TRACING_V2=true` and `LANGCHAIN_API_KEY`.
+- **Three parallel LLM branches run after Monte Carlo.** The parent graph fans out from `run_monte_carlo` to `run_standard_analysis`, `run_accumulation_agent`, and `run_withdrawal_agent` simultaneously; LangGraph executes them in parallel. Each writes one `PlanAnalysisSection` to the shared reducer-backed `analysis_sections` field. A fourth `synthesize_explanation` node fans them back in.
+- **LLM branches are async.** The parent graph is invoked with `ainvoke()`. All text-generation branches await `ExplanationService`, which calls `GatewayClient.acomplete()`. Sync calculation nodes remain sync.
+- **Confidence band is data, not routing.** There are no conditional edges based on `ConfidenceBand`. All three analysis branches always run; the synthesis node receives `ConfidenceBand` as an input and uses it to shape tone. This replaces the previous `route_by_confidence_band` conditional edge.
+- **Accumulation and withdrawal analyses run probes before the LLM call.** The nodes run deterministic local probes, then include probe outputs in the prompt passed through `ExplanationService`.
+- **Accumulation probes are LP sensitivity probes** — read-only recalculations of LP outcomes for changed inputs (savings capacity delta, retirement age shift, employer match cap change).
+- **Withdrawal probes are MC sensitivity probes** — MC reruns for changed inputs (annual expense delta, retirement duration extension, withdrawal rate query). Probes use a fixed RNG seed for comparability.
+- **Synthesis node receives all three analysis sections plus `ConfidenceBand`** and produces the single client-facing explanation. It is a simple LLM completion (no tools, no loop).
+- **LLM accessed through `services.llm` only via `ExplanationService` from graph code**. The module defines `GatewayClient`, a single concrete class backed by the OpenAI-format REST API. Production points at the enterprise LLM gateway; local development points at the local FastAPI shim, which proxies to Ollama's OpenAI-compatible endpoint. The async graph path uses `AsyncOpenAI`; the compatibility sync path uses `OpenAI`. Both are wrapped with `langsmith.wrappers.wrap_openai` so LLM calls appear in LangSmith traces alongside LangGraph node traces — enable with `LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY`.
+- **Instrumentation is isolated from graph topology.** Node timing/logging lives in `instrumentation/nodes.py` and supports sync and async callables; run names, LangSmith tags, metadata, and checkpoint `thread_id` config live in `instrumentation/tracing.py`.
 - **ExplanationService uses dependency injection for LLM access**. It accepts a `GatewayClient` so tests can mock it at the call site. `main.build_graph()` wires the explanation service into the graph.
 - **Monte Carlo RNG is injected via `build_monte_carlo_node(rng=None)`**. Production passes no RNG (a fresh non-seeded generator is created at graph-build time). Tests pass `np.random.default_rng(42)` for determinism. The fixed seed in the previous implementation was development convenience, not policy — same inputs do not guarantee the same `ConfidenceScore` in production.
 - **CustomerProfile is mocked** in v1. All data interfaces are designed to be replaced by real API calls without changing node signatures.
@@ -260,20 +272,16 @@ Each node is a plain function `(state: RetirementPlanState) -> dict[str, Any]`. 
 
 ## Project Goal
 
-Current goal: build a best-practice LangGraph pipeline with a fan-out/fan-in parallel agent architecture. Quality bar is idiomatic LangGraph, clean contracts, and testability. The three parallel agents (`standard_analysis`, `accumulation_agent`, `withdrawal_agent`) demonstrate the `create_react_agent` subgraph pattern with injected tools.
+Current goal: build a best-practice LangGraph pipeline with a fan-out/fan-in parallel analysis architecture. Quality bar is idiomatic LangGraph, clean contracts, and testability. The three parallel analysis branches demonstrate reducer-backed concurrent state updates, and every LLM call from the graph goes through `ExplanationService` and the configured gateway.
 
 Future goal: make the graph interactive using LangGraph human-in-the-loop / interrupt patterns — `PlanRevisionIntake`, `RevisedPlanScenario`, and comparison output.
 
 ## Next Steps
 
-1. **Add `standard_analysis`, `accumulation_analysis`, `withdrawal_analysis` fields to `RetirementPlanState`** — three new `str` fields (default `""`) to hold the parallel agent outputs before synthesis.
-2. **Implement `services/lp_sensitivity.py`** — LP sensitivity probe tools (savings capacity delta, retirement age shift, employer match cap change) registered as LangGraph tools with the accumulation agent.
-3. **Implement `services/mc_sensitivity.py`** — MC sensitivity probe tools (expense delta, retirement duration extension, withdrawal rate query) registered with the withdrawal agent.
-4. **Implement `nodes/standard_analysis.py`** — simple LLM completion node; adapts state to a prompt and writes `standard_analysis`.
-5. **Implement `nodes/accumulation_agent.py`** — `create_react_agent` subgraph with LP sensitivity tools; writes `accumulation_analysis`.
-6. **Implement `nodes/withdrawal_agent.py`** — `create_react_agent` subgraph with MC sensitivity tools; writes `withdrawal_analysis`.
-7. **Implement `nodes/synthesize_explanation.py`** — LLM synthesis node; reads all three analyses + `confidence_band`; writes `explanation`.
-8. **Rewire `main.py`** — replace conditional confidence-band edges with fan-out from `run_monte_carlo` to all three agents, fan-in to `synthesize_explanation`, then `format_output`.
+- **Human-in-the-loop revision workflow** — implement `PlanRevisionIntake` using LangGraph interrupt patterns; present model-informed levers (retirement age, expenses, savings targets) and rerun optimization on the approved `RevisedPlanScenario`.
+- **Replace mocked profile with real API** — `src/lang_graph_state/nodes/load_profile.py` returns a hardcoded `CustomerProfile`; wire it to the actual customer data API when available.
+- **HSA age-55 catch-up** — the two-phase model uses base HSA limits in both phases; a third phase (age 55+) would correctly capture the HSA catch-up window.
+- **Multi-year LP** — income growth, expense growth, and IRS limit indexing are held fixed in v1; a year-by-year LP formulation deferred to v2.
 
 ## Flagged Ambiguities
 

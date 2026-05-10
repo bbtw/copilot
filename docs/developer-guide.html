@@ -388,6 +388,7 @@
       <a href="#orientation">Orientation</a>
       <a href="#mental-model">Mental Model</a>
       <a href="#state-flow">State Flow</a>
+      <a href="#parallel-execution">Parallel Execution</a>
       <a href="#node-contract">Node Contract</a>
       <a href="#domain-model">Domain Model</a>
       <a href="#calculation-boundaries">API Boundaries</a>
@@ -404,6 +405,11 @@
           where domain decisions live, and how to make changes without blurring orchestration, optimization,
           simulation, and explanation responsibilities.
         </p>
+        <p style="margin-top: 14px;">
+          <a href="graph-explorer.html" style="color: inherit; font-size: 13px; opacity: 0.7; text-decoration: underline; text-underline-offset: 3px;">
+            Open the interactive Graph Explorer →
+          </a>
+        </p>
       </header>
 
       <section id="orientation">
@@ -411,26 +417,28 @@
         <p>
           The app is a compact simulation of a production retirement planning workflow. It starts with a
           fully populated customer profile, computes an optimized contribution plan, scores that plan with a
-          Monte Carlo projection, asks an LLM to explain the outcome, and formats the result for display.
+          Monte Carlo projection, fans out to three concurrent LLM analysis nodes, fans back in to synthesize
+          a final explanation, and formats the result for display.
         </p>
         <p>
-          Treat the repository as two things at once: a runnable LangGraph example and a domain model for
-          after-tax retirement contribution planning. The code is intentionally small, but the boundaries
-          matter because future versions are expected to replace local implementations with production APIs.
+          Treat the repository as two things at once: a runnable LangGraph example demonstrating fan-out /
+          fan-in parallel execution with gateway-backed LLM calls, and a domain model for after-tax retirement
+          contribution planning. The LP and Monte Carlo nodes are deliberately stand-ins; the LangGraph
+          patterns they demonstrate are the point.
         </p>
 
         <div class="grid three">
           <div class="panel stat">
-            <strong>5</strong>
-            <p>Graph nodes run in a fixed sequence from profile loading to final result formatting.</p>
+            <strong>8</strong>
+            <p>Graph nodes: two sequential data nodes, three concurrent LLM nodes, one synthesis node, and two bookend nodes.</p>
           </div>
           <div class="panel stat">
-            <strong>7</strong>
-            <p>State keys are accumulated in <code>RetirementPlanState</code> as each node completes its work.</p>
+            <strong>11</strong>
+            <p>State keys accumulated in <code>RetirementPlanState</code> as each node completes its work.</p>
           </div>
           <div class="panel stat">
-            <strong>2</strong>
-            <p>The LP and Monte Carlo engines are deliberately separate calculation boundaries.</p>
+            <strong>4</strong>
+            <p>LLM calls per run: three analysis completions fire in parallel through the gateway, then one synthesis fan-in.</p>
           </div>
         </div>
       </section>
@@ -453,101 +461,160 @@
       <section id="state-flow">
         <h2>State Flow</h2>
         <p>
-          <code>main.py</code> builds a <code>StateGraph(RetirementPlanState)</code> and invokes it with an empty dictionary.
-          From there, each node adds the next piece of the plan. The final state contains both intermediate
-          values and the assembled <code>RetirementPlanResult</code>.
+          <code>src/lang_graph_state/main.py</code> builds a <code>StateGraph(RetirementPlanState)</code> and invokes it with an empty dictionary.
+          Two sequential data nodes run first, then three LLM analysis nodes fire concurrently, then a
+          synthesis node fans them back in. The final state contains every intermediate value plus the
+          assembled <code>RetirementPlanResult</code>.
         </p>
 
         <div class="flow" role="list" aria-label="LangGraph state flow">
           <article class="node" role="listitem">
             <h3>load_customer_profile</h3>
-            <p>Creates the mocked customer inputs used by the rest of the pipeline.</p>
+            <p>Plain function. Creates the mocked customer inputs used by the rest of the pipeline.</p>
             <code>customer_profile</code>
           </article>
           <article class="node" role="listitem">
             <h3>run_lp_optimizer</h3>
-            <p>Solves the deterministic after-tax contribution allocation problem.</p>
+            <p>Plain function (stand-in). Solves the deterministic after-tax contribution allocation problem.</p>
             <code>contribution_allocation</code>
             <code>projected_wealth</code>
+            <code>optimization_diagnostics</code>
           </article>
           <article class="node" role="listitem">
             <h3>run_monte_carlo</h3>
-            <p>Scores the optimized plan across stochastic market and inflation paths.</p>
+            <p>Plain function (stand-in). Scores the optimized plan and triggers the fan-out to three parallel branches.</p>
             <code>wealth_distribution</code>
             <code>confidence_score</code>
             <code>confidence_band</code>
           </article>
-          <article class="node" role="listitem">
-            <h3>route_by_confidence_band</h3>
-            <p>Branches to the low, medium, or high confidence explanation route.</p>
-            <code>confidence_band</code>
+          <article class="node" role="listitem" style="border-color: #6366F1;">
+            <h3>run_standard_analysis</h3>
+            <p>LLM call. Single completion — no tools, no loop. Parallel branch 1 of 3.</p>
+            <code>analysis_sections[kind=standard]</code>
           </article>
-          <article class="node" role="listitem">
-            <h3>confidence explanation</h3>
-            <p>Builds a client-facing explanation with route-specific confidence guidance.</p>
+          <article class="node" role="listitem" style="border-color: #8B5CF6;">
+            <h3>run_accumulation_agent</h3>
+            <p>LP sensitivity probes, then a gateway-backed LLM call. Parallel branch 2 of 3.</p>
+            <code>analysis_sections[kind=accumulation]</code>
+          </article>
+          <article class="node" role="listitem" style="border-color: #8B5CF6;">
+            <h3>run_withdrawal_agent</h3>
+            <p>MC sensitivity probes, then a gateway-backed LLM call. Parallel branch 3 of 3.</p>
+            <code>analysis_sections[kind=withdrawal]</code>
+          </article>
+          <article class="node" role="listitem" style="border-color: #A855F7;">
+            <h3>synthesize_explanation</h3>
+            <p>LLM call. Fan-in node — fires only after all three parallel branches complete.</p>
             <code>explanation</code>
           </article>
           <article class="node" role="listitem">
             <h3>format_output</h3>
-            <p>Assembles a structured result object and print-friendly summary.</p>
+            <p>Plain function. Assembles a structured result object and print-friendly summary.</p>
             <code>result</code>
           </article>
-        </div>
-
-        <div class="arrow-row" aria-hidden="true">
-          <div>initial <code>{}</code></div>
-          <div>profile added</div>
-          <div>plan added</div>
-          <div>risk view added</div>
-          <div>route selected</div>
-          <div>final state</div>
         </div>
 
         <table>
           <thead>
             <tr>
               <th>Node</th>
-              <th>Reads</th>
+              <th>Type</th>
               <th>Returns</th>
             </tr>
           </thead>
           <tbody>
             <tr>
               <td><code>load_customer_profile</code></td>
-              <td>Initial empty state</td>
+              <td>Plain function</td>
               <td><code>customer_profile</code></td>
             </tr>
             <tr>
               <td><code>run_lp_optimizer</code></td>
-              <td><code>customer_profile</code></td>
-              <td><code>contribution_allocation</code>, <code>projected_wealth</code></td>
+              <td>Plain function (stand-in)</td>
+              <td><code>contribution_allocation</code>, <code>projected_wealth</code>, <code>optimization_diagnostics</code></td>
             </tr>
             <tr>
               <td><code>run_monte_carlo</code></td>
-              <td><code>customer_profile</code>, <code>contribution_allocation</code>, <code>projected_wealth</code></td>
+              <td>Plain function (stand-in)</td>
               <td><code>wealth_distribution</code>, <code>confidence_score</code>, <code>confidence_band</code></td>
             </tr>
             <tr>
-              <td><code>route_by_confidence_band</code></td>
-              <td><code>confidence_band</code></td>
-              <td>
-                one of <code>generate_low_confidence_explanation</code>,
-                <code>generate_medium_confidence_explanation</code>, or
-                <code>generate_high_confidence_explanation</code>
-              </td>
+              <td><code>run_standard_analysis</code></td>
+              <td>LLM completion — parallel</td>
+              <td><code>analysis_sections[kind=standard]</code></td>
             </tr>
             <tr>
-              <td>confidence-specific explanation node</td>
-              <td><code>customer_profile</code>, <code>contribution_allocation</code>, <code>projected_wealth</code>, <code>wealth_distribution</code>, <code>confidence_score</code>, <code>confidence_band</code></td>
+              <td><code>run_accumulation_agent</code></td>
+              <td>LP probes + LLM completion — parallel</td>
+              <td><code>analysis_sections[kind=accumulation]</code></td>
+            </tr>
+            <tr>
+              <td><code>run_withdrawal_agent</code></td>
+              <td>MC probes + LLM completion — parallel</td>
+              <td><code>analysis_sections[kind=withdrawal]</code></td>
+            </tr>
+            <tr>
+              <td><code>synthesize_explanation</code></td>
+              <td>LLM completion — fan-in</td>
               <td><code>explanation</code></td>
             </tr>
             <tr>
               <td><code>format_output</code></td>
-              <td>All prior outputs</td>
+              <td>Plain function</td>
               <td><code>result</code></td>
             </tr>
           </tbody>
         </table>
+      </section>
+
+      <section id="parallel-execution" class="band">
+        <h2>Parallel Execution</h2>
+        <p>
+          LangGraph runs nodes concurrently whenever multiple outgoing edges share the same source node.
+          No threading code is needed — the parallelism is declared entirely through graph wiring in
+          <code>src/lang_graph_state/main.py</code>.
+        </p>
+
+        <pre><code># Fan-out: three edges from one node → three branches run simultaneously
+graph.add_edge("run_monte_carlo", "run_standard_analysis")
+graph.add_edge("run_monte_carlo", "run_accumulation_agent")
+graph.add_edge("run_monte_carlo", "run_withdrawal_agent")
+
+# Fan-in: LangGraph holds synthesize_explanation until all three have returned
+graph.add_edge("run_standard_analysis",   "synthesize_explanation")
+graph.add_edge("run_accumulation_agent", "synthesize_explanation")
+graph.add_edge("run_withdrawal_agent",   "synthesize_explanation")</code></pre>
+
+        <div class="callout">
+          <p>
+            Each parallel node writes one <code>PlanAnalysisSection</code> to the shared
+            <code>analysis_sections</code> key. LangGraph uses that key's explicit reducer to merge the
+            three concurrent partial dicts before dispatching
+            <code>synthesize_explanation</code>.
+          </p>
+        </div>
+
+        <h3 style="margin-top: 28px; font-size: 15px;">Gateway-backed analysis nodes</h3>
+        <p>
+          All three parallel LLM branches call <code>ExplanationService</code>. The accumulation and
+          withdrawal branches run local deterministic probes first, then include those probe outputs in
+          the prompt sent through the configured LLM gateway.
+        </p>
+
+        <pre><code>def _build_analysis_node(*, service_call, build_probes, analysis_kind):
+    async def run_analysis(state):
+        request = _request_from_state(state)
+        probe_results = build_probes(state)
+        return {"analysis_sections": [PlanAnalysisSection(
+            kind=analysis_kind,
+            content=await service_call(request, probe_results),
+        )]}
+    return run_analysis</code></pre>
+
+        <p>
+          The graph nodes do not construct model clients. <code>ExplanationService</code> owns prompt
+          assembly and delegates every LLM request to <code>GatewayClient</code>.
+        </p>
       </section>
 
       <section id="node-contract" class="band">
@@ -559,26 +626,38 @@
           and writes the keys it owns — nothing more.
         </p>
         <p>
-          The full set of valid keys is declared once in <code>RetirementPlanState</code> in <code>state.py</code>. That is the
+          The full set of valid keys is declared once in <code>RetirementPlanState</code> in <code>src/lang_graph_state/domain/state.py</code>. That is the
           team's agreement on what exists, what type it carries, and which node is responsible for it.
           Adding a key means adding it there first.
         </p>
 
-        <pre><code>def run_lp_optimizer(state: RetirementPlanState) -> dict[str, Any]:
+        <pre><code># Plain function node — reads state, returns partial dict
+def run_lp_optimizer(state: RetirementPlanState) -> dict[str, Any]:
     profile = state.customer_profile
-    allocation, wealth = solve(profile)
-    return {"contribution_allocation": allocation, "projected_wealth": wealth}
-
-def run_monte_carlo(state: RetirementPlanState) -> dict[str, Any]:
-    paths = simulate(state.customer_profile, state.contribution_allocation)
+    allocation, wealth, diagnostics = solve(profile)
     return {
-        "wealth_distribution": paths.distribution,
-        "confidence_score": paths.confidence,
-        "confidence_band": paths.confidence_band,
+        "contribution_allocation": allocation,
+        "projected_wealth": wealth,
+        "optimization_diagnostics": diagnostics,
     }
 
-def route_by_confidence_band(state: RetirementPlanState) -> str:
-    return state.confidence_band</code></pre>
+# Builder pattern — captures dependencies at build time, state at call time
+def build_standard_analysis_node(svc: ExplanationService):
+    async def run(state: RetirementPlanState) -> dict[str, Any]:
+        return {"analysis_sections": [
+            PlanAnalysisSection(kind="standard", content=await svc.astandard_analysis(state))
+        ]}
+    return run
+
+# Gateway-backed analysis node — probes locally, then calls ExplanationService
+	def _build_analysis_node(*, service_call, build_probes, analysis_kind):
+	    async def run_analysis(state: RetirementPlanState) -> dict[str, Any]:
+	        request = _request_from_state(state)
+	        probe_results = build_probes(state)
+	        return {"analysis_sections": [
+	            PlanAnalysisSection(kind=analysis_kind, content=await service_call(request, probe_results))
+	        ]}
+	    return run_analysis</code></pre>
 
         <div class="callout">
           <p>
@@ -591,7 +670,7 @@ def route_by_confidence_band(state: RetirementPlanState) -> str:
       <section id="domain-model">
         <h2>Domain Model</h2>
         <p>
-          The core domain types live in <code>models.py</code>. <code>CustomerProfile</code> describes the customer's financial
+          The core domain types live in <code>src/lang_graph_state/domain/models.py</code>. <code>CustomerProfile</code> describes the customer's financial
           situation. <code>ContributionAllocation</code> holds the optimizer's annual recommendations before age 50 and
           after age 50. <code>WealthDistribution</code> captures Monte Carlo percentiles, <code>ConfidenceBand</code>
           classifies the projection result for internal explanation policy, and <code>RetirementPlanResult</code>
@@ -637,43 +716,56 @@ def route_by_confidence_band(state: RetirementPlanState) -> str:
       <section id="llm-boundary">
         <h2>LLM Boundary</h2>
         <p>
-          The graph routes to a confidence-specific explanation node after both API calls complete. Its job
-          is narration only — it should not invent new allocations, modify confidence, or reinterpret the
-          optimizer's objective.
+          There are four LLM calls per run. All four are narration-only — they should not invent new
+          allocations, modify confidence scores, or reinterpret the optimizer's objective.
         </p>
 
         <table>
           <thead>
             <tr>
-              <th>Direction</th>
-              <th>State keys</th>
+              <th>Node</th>
+              <th>Pattern</th>
+              <th>Reads</th>
+              <th>Returns</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>Input (reads)</td>
-              <td>
-                <code>customer_profile</code>, <code>contribution_allocation</code>, <code>projected_wealth</code>,
-                <code>wealth_distribution</code>, <code>confidence_score</code>, <code>confidence_band</code>
-              </td>
+              <td><code>run_standard_analysis</code></td>
+              <td>Single completion</td>
+              <td><code>customer_profile</code>, <code>contribution_allocation</code>, <code>projected_wealth</code>, <code>wealth_distribution</code>, <code>confidence_score</code>, <code>confidence_band</code></td>
+              <td><code>analysis_sections[kind=standard]</code></td>
             </tr>
             <tr>
-              <td>Output (returns)</td>
+              <td><code>run_accumulation_agent</code></td>
+              <td>LP probes + gateway completion</td>
+              <td><code>customer_profile</code>, <code>contribution_allocation</code>, <code>projected_wealth</code>, <code>optimization_diagnostics</code></td>
+              <td><code>analysis_sections[kind=accumulation]</code></td>
+            </tr>
+            <tr>
+              <td><code>run_withdrawal_agent</code></td>
+              <td>MC probes + gateway completion</td>
+              <td><code>customer_profile</code>, <code>contribution_allocation</code>, <code>wealth_distribution</code>, <code>confidence_score</code>, <code>confidence_band</code></td>
+              <td><code>analysis_sections[kind=withdrawal]</code></td>
+            </tr>
+            <tr>
+              <td><code>synthesize_explanation</code></td>
+              <td>Single completion (fan-in)</td>
+              <td><code>analysis_sections</code>, <code>confidence_band</code></td>
               <td><code>explanation</code></td>
             </tr>
           </tbody>
         </table>
 
         <p style="margin-top: 20px;">
-          Provider details belong behind <code>services/llm.py</code>. Graph wiring belongs in <code>main.py</code>.
-          The route-specific explanation functions in <code>nodes/explanation.py</code> own prompt construction —
-          they format the six input keys into a prompt, add confidence-specific guidance, and call the gateway.
+          Provider details belong behind <code>src/lang_graph_state/services/llm.py</code>. Graph wiring belongs in <code>src/lang_graph_state/main.py</code>.
+          Prompt construction lives in the node files — <code>src/lang_graph_state/nodes/standard_analysis.py</code>,
+          <code>src/lang_graph_state/nodes/analysis_agents.py</code>, and <code>src/lang_graph_state/nodes/synthesize_explanation.py</code>.
         </p>
         <div class="callout">
           <p>
-            If you change a state key that feeds the explanation node, update the prompt in
-            <code>nodes/explanation.py</code>. The LLM has no awareness of state — it only sees what the
-            prompt explicitly passes.
+            If you change a state key that feeds any LLM node, update the prompt in the corresponding
+            node file. The LLM has no awareness of state — it only sees what the prompt explicitly passes.
           </p>
         </div>
       </section>
@@ -682,10 +774,19 @@ def route_by_confidence_band(state: RetirementPlanState) -> str:
         <h2>Working Rules</h2>
         <div class="grid two">
           <div class="panel">
-            <h3>When adding a node</h3>
+            <h3>When adding a sequential node</h3>
             <p>
               Add the state key to <code>RetirementPlanState</code>, define which upstream keys it reads, return only
-              the keys it owns, and update this guide's state flow table.
+              the keys it owns, and wire it with two <code>add_edge</code> calls in <code>src/lang_graph_state/main.py</code>.
+              Update the state flow table above.
+            </p>
+          </div>
+          <div class="panel">
+            <h3>When adding a parallel node</h3>
+            <p>
+              Add an <code>add_edge</code> from the fan-out source (<code>run_monte_carlo</code>) to the new node,
+              and an <code>add_edge</code> from the new node to the fan-in target (<code>synthesize_explanation</code>).
+              Add its output key to <code>RetirementPlanState</code> and update the synthesize prompt.
             </p>
           </div>
           <div class="panel">
@@ -696,17 +797,11 @@ def route_by_confidence_band(state: RetirementPlanState) -> str:
             </p>
           </div>
           <div class="panel">
-            <h3>When changing calculations</h3>
+            <h3>When changing an LLM node</h3>
             <p>
-              Add or adjust tests around the affected engine. LP tests should verify constraints and optimal
-              allocation properties; Monte Carlo tests should verify shape and scenario behavior.
-            </p>
-          </div>
-          <div class="panel">
-            <h3>When changing explanations</h3>
-            <p>
-              Check that the prompt uses only facts available in state and that the generated language does
-              not overstate certainty or present stochastic output as a guarantee.
+              Update the prompt in the node's builder function. The LLM sees only what the prompt passes —
+              changing a state key without updating the prompt silently degrades output quality.
+              Check that generated language does not overstate certainty.
             </p>
           </div>
         </div>
@@ -714,6 +809,8 @@ def route_by_confidence_band(state: RetirementPlanState) -> str:
 
       <footer>
         Open this file directly in a browser: <code>docs/developer-guide.html</code>.
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+        <a href="graph-explorer.html" style="color: inherit; text-decoration: underline; text-underline-offset: 3px;">Interactive Graph Explorer</a>
       </footer>
     </main>
   </div>

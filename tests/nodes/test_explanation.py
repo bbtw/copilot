@@ -1,23 +1,32 @@
-from models import (
+import asyncio
+
+from lang_graph_state.domain.models import (
     ACCOUNT_TYPES,
     ContributionAllocation,
     CustomerProfile,
+    PlanAnalysisSection,
     WealthDistribution,
 )
-from nodes import explanation
-from state import RetirementPlanState
+from lang_graph_state.nodes.standard_analysis import build_standard_analysis_node
+from lang_graph_state.nodes.synthesize_explanation import build_synthesize_explanation_node
+from lang_graph_state.domain.state import RetirementPlanState
 
 
 class FakeExplanationService:
     def __init__(self) -> None:
-        self.request = None
+        self.standard_request = None
+        self.synthesize_args = None
 
-    def generate(self, request):
-        self.request = request
-        return "explanation"
+    async def astandard_analysis(self, request):
+        self.standard_request = request
+        return "standard analysis"
+
+    async def asynthesize(self, standard, accumulation, withdrawal, confidence_band):
+        self.synthesize_args = (standard, accumulation, withdrawal, confidence_band)
+        return "synthesized explanation"
 
 
-def _state(confidence_band: str) -> RetirementPlanState:
+def _state(confidence_band: str = "high") -> RetirementPlanState:
     return RetirementPlanState(
         customer_profile=CustomerProfile(
             age=42,
@@ -41,30 +50,41 @@ def _state(confidence_band: str) -> RetirementPlanState:
         ),
         projected_wealth=1_000_000,
         wealth_distribution=WealthDistribution(p10=600_000, p50=900_000, p90=1_300_000),
-        confidence_score=0.35,
+        confidence_score=0.88,
         confidence_band=confidence_band,
+        analysis_sections=[
+            PlanAnalysisSection(kind="standard", content="plan overview"),
+            PlanAnalysisSection(kind="accumulation", content="accumulation analysis"),
+            PlanAnalysisSection(kind="withdrawal", content="withdrawal analysis"),
+        ],
     )
 
 
-def test_build_explanation_node_adapts_state_to_service_request():
+def test_standard_analysis_node_adapts_state_to_service_request():
     service = FakeExplanationService()
-    node = explanation.build_explanation_node("low", service)
+    node = build_standard_analysis_node(service)
 
-    result = node(_state("low"))
+    result = asyncio.run(node(_state("high")))
 
-    assert result == {"explanation": "explanation"}
-    assert service.request.confidence_band == "low"
-    assert service.request.projected_wealth == 1_000_000
-    assert service.request.customer_profile.age == 42
+    assert result == {
+        "analysis_sections": [
+            PlanAnalysisSection(kind="standard", content="standard analysis"),
+        ],
+    }
+    assert service.standard_request.confidence_band == "high"
+    assert service.standard_request.projected_wealth == 1_000_000
+    assert service.standard_request.customer_profile.age == 42
 
 
-def test_explanation_route_mismatch_fails_fast():
+def test_synthesize_explanation_node_passes_all_analyses_to_service():
     service = FakeExplanationService()
-    node = explanation.build_explanation_node("low", service)
+    node = build_synthesize_explanation_node(service)
 
-    try:
-        node(_state("high"))
-    except ValueError as exc:
-        assert "Explanation route mismatch" in str(exc)
-    else:
-        raise AssertionError("Expected route mismatch to raise ValueError")
+    result = asyncio.run(node(_state("low")))
+
+    assert result == {"explanation": "synthesized explanation"}
+    standard, accumulation, withdrawal, band = service.synthesize_args
+    assert standard == "plan overview"
+    assert accumulation == "accumulation analysis"
+    assert withdrawal == "withdrawal analysis"
+    assert band == "low"

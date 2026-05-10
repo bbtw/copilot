@@ -1,10 +1,10 @@
 import numpy as np
 import pytest
 
-from models import ACCOUNT_TYPES, ContributionAllocation, CustomerProfile
-import nodes.monte_carlo as monte_carlo
-from nodes.monte_carlo import build_monte_carlo_node
-from state import RetirementPlanState
+from lang_graph_state.domain.models import ACCOUNT_TYPES, ContributionAllocation, CustomerProfile, classify_confidence
+import lang_graph_state.services.mc_simulator as mc_simulator
+from lang_graph_state.nodes.monte_carlo import build_monte_carlo_node
+from lang_graph_state.domain.state import RetirementPlanState
 
 
 def _profile(**overrides) -> CustomerProfile:
@@ -29,11 +29,11 @@ def _profile(**overrides) -> CustomerProfile:
 
 
 def test_monte_carlo_includes_employer_match_and_scores_retirement_survival(monkeypatch):
-    monkeypatch.setattr(monte_carlo, "N_PATHS", 5)
-    monkeypatch.setattr(monte_carlo, "RETURN_MEAN", 0.0)
-    monkeypatch.setattr(monte_carlo, "RETURN_STD", 0.0)
-    monkeypatch.setattr(monte_carlo, "INFLATION_MEAN", 0.0)
-    monkeypatch.setattr(monte_carlo, "INFLATION_STD", 0.0)
+    monkeypatch.setattr(mc_simulator, "N_PATHS", 5)
+    monkeypatch.setattr(mc_simulator, "RETURN_MEAN", 0.0)
+    monkeypatch.setattr(mc_simulator, "RETURN_STD", 0.0)
+    monkeypatch.setattr(mc_simulator, "INFLATION_MEAN", 0.0)
+    monkeypatch.setattr(mc_simulator, "INFLATION_STD", 0.0)
 
     alloc = ContributionAllocation(
         pre50={a: 0.0 for a in ACCOUNT_TYPES},
@@ -56,11 +56,11 @@ def test_monte_carlo_includes_employer_match_and_scores_retirement_survival(monk
 
 
 def test_expected_retirement_income_offsets_retirement_expenses(monkeypatch):
-    monkeypatch.setattr(monte_carlo, "N_PATHS", 5)
-    monkeypatch.setattr(monte_carlo, "RETURN_MEAN", 0.0)
-    monkeypatch.setattr(monte_carlo, "RETURN_STD", 0.0)
-    monkeypatch.setattr(monte_carlo, "INFLATION_MEAN", 0.0)
-    monkeypatch.setattr(monte_carlo, "INFLATION_STD", 0.0)
+    monkeypatch.setattr(mc_simulator, "N_PATHS", 5)
+    monkeypatch.setattr(mc_simulator, "RETURN_MEAN", 0.0)
+    monkeypatch.setattr(mc_simulator, "RETURN_STD", 0.0)
+    monkeypatch.setattr(mc_simulator, "INFLATION_MEAN", 0.0)
+    monkeypatch.setattr(mc_simulator, "INFLATION_STD", 0.0)
 
     alloc = ContributionAllocation(
         pre50={a: 0.0 for a in ACCOUNT_TYPES},
@@ -95,4 +95,4 @@ def test_expected_retirement_income_offsets_retirement_expenses(monkeypatch):
     ],
 )
 def test_classify_confidence_uses_documented_thresholds(score, band):
-    assert monte_carlo.classify_confidence(score) == band
+    assert classify_confidence(score) == band
