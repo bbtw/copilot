@@ -1,3 +1,7 @@
+"""
+Placeholder domain models. Field shapes are TBD when production APIs are wired.
+The reducer is defined here because it is tightly coupled to AnalysisSection and its ordering rules.
+"""
 from typing import Literal
 
 from pydantic import BaseModel
@@ -35,6 +39,7 @@ def merge_analysis_sections(
     current: list[AnalysisSection] | None,
     updates: list[AnalysisSection] | None,
 ) -> list[AnalysisSection]:
+    # Deduplication by kind makes retries idempotent: a replayed branch overwrites rather than appends.
     by_kind = {section.kind: section for section in current or []}
     for section in updates or []:
         by_kind[section.kind] = section

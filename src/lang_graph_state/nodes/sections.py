@@ -1,3 +1,7 @@
+"""
+Fan-out analysis nodes. Each runs concurrently after run_monte_carlo and writes one AnalysisSection
+to the shared reducer-backed state field. To add a new analysis type, add a new builder here.
+"""
 from collections.abc import Awaitable, Callable
 from typing import Any
 

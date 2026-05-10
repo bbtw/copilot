@@ -1,3 +1,7 @@
+"""
+Graph assembly and entry point. build_graph wires all nodes and edges; amain runs a single
+end-to-end invocation with an in-memory checkpointer.
+"""
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -40,6 +44,7 @@ def build_graph(
     graph.add_edge("load_profile", "run_lp_optimizer")
     graph.add_edge("run_lp_optimizer", "run_monte_carlo")
 
+    # Multiple edges from one node trigger a parallel super-step: all three section nodes run concurrently.
     graph.add_edge("run_monte_carlo", "run_section_a")
     graph.add_edge("run_monte_carlo", "run_section_b")
     graph.add_edge("run_monte_carlo", "run_section_c")
