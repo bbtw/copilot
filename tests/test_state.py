@@ -2,26 +2,30 @@ from lang_graph_state.domain.models import AnalysisSection, merge_analysis_secti
 
 
 def test_merge_deduplicates_by_kind():
-    current = [AnalysisSection(kind="section_a", content="old")]
+    current = [AnalysisSection(kind="standard_explanation", content="old")]
     updates = [
-        AnalysisSection(kind="section_b", content="b"),
-        AnalysisSection(kind="section_a", content="new"),
+        AnalysisSection(kind="contribution_explanation", content="b"),
+        AnalysisSection(kind="standard_explanation", content="new"),
     ]
     merged = merge_analysis_sections(current, updates)
     assert [(s.kind, s.content) for s in merged] == [
-        ("section_a", "new"),
-        ("section_b", "b"),
+        ("standard_explanation", "new"),
+        ("contribution_explanation", "b"),
     ]
 
 
 def test_merge_preserves_canonical_order():
     sections = [
-        AnalysisSection(kind="section_c", content="c"),
-        AnalysisSection(kind="section_a", content="a"),
-        AnalysisSection(kind="section_b", content="b"),
+        AnalysisSection(kind="withdrawal_explanation", content="c"),
+        AnalysisSection(kind="standard_explanation", content="a"),
+        AnalysisSection(kind="contribution_explanation", content="b"),
     ]
     merged = merge_analysis_sections([], sections)
-    assert [s.kind for s in merged] == ["section_a", "section_b", "section_c"]
+    assert [s.kind for s in merged] == [
+        "standard_explanation",
+        "contribution_explanation",
+        "withdrawal_explanation",
+    ]
 
 
 def test_merge_handles_empty_inputs():

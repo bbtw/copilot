@@ -86,7 +86,7 @@
   <section>
     <h2>Flow</h2>
     <div class="diagram">
-      <svg width="480" height="460" viewBox="0 0 480 460"
+      <svg width="600" height="460" viewBox="0 0 600 460"
            xmlns="http://www.w3.org/2000/svg"
            style="font-family: system-ui, -apple-system, sans-serif;">
         <defs>
@@ -94,72 +94,83 @@
                   markerWidth="5" markerHeight="5" orient="auto-start-reverse">
             <path d="M 0 1 L 9 5 L 0 9 z" fill="#ccc"/>
           </marker>
+          <marker id="arrow-cond" viewBox="0 0 10 10" refX="9" refY="5"
+                  markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#bbb"/>
+          </marker>
         </defs>
 
-        <!-- Arrows behind nodes -->
+        <!-- Sequential and fan-in arrows -->
         <g stroke="#ddd" stroke-width="1.5" fill="none" marker-end="url(#arrow)">
-          <line x1="240" y1="43"  x2="240" y2="58"/>
-          <line x1="240" y1="90"  x2="240" y2="116"/>
-          <line x1="240" y1="148" x2="240" y2="174"/>
-          <line x1="240" y1="206" x2="85"  y2="244"/>
-          <line x1="240" y1="206" x2="240" y2="244"/>
-          <line x1="240" y1="206" x2="395" y2="244"/>
-          <line x1="85"  y1="276" x2="240" y2="314"/>
-          <line x1="240" y1="276" x2="240" y2="314"/>
-          <line x1="395" y1="276" x2="240" y2="314"/>
-          <line x1="240" y1="346" x2="240" y2="380"/>
-          <line x1="240" y1="412" x2="240" y2="422"/>
+          <line x1="300" y1="43"  x2="300" y2="58"/>
+          <line x1="300" y1="90"  x2="300" y2="116"/>
+          <line x1="300" y1="148" x2="300" y2="174"/>
+          <line x1="300" y1="206" x2="113" y2="244"/>
+          <line x1="113" y1="276" x2="300" y2="314"/>
+          <line x1="300" y1="276" x2="300" y2="314"/>
+          <line x1="487" y1="276" x2="300" y2="314"/>
+          <line x1="300" y1="346" x2="300" y2="380"/>
+          <line x1="300" y1="412" x2="300" y2="422"/>
+        </g>
+
+        <!-- Conditional fan-out arrows (route_after_mc) -->
+        <g stroke="#bbb" stroke-width="1.5" stroke-dasharray="4 3" fill="none" marker-end="url(#arrow-cond)">
+          <line x1="300" y1="206" x2="300" y2="244"/>
+          <line x1="300" y1="206" x2="487" y2="244"/>
         </g>
 
         <!-- START -->
-        <ellipse cx="240" cy="28" rx="32" ry="15" fill="#1a1a1a"/>
-        <text x="240" y="28" text-anchor="middle" dominant-baseline="central"
+        <ellipse cx="300" cy="28" rx="32" ry="15" fill="#1a1a1a"/>
+        <text x="300" y="28" text-anchor="middle" dominant-baseline="central"
               fill="white" font-size="11" font-weight="500">START</text>
 
         <!-- load_profile -->
-        <rect x="158" y="58" width="164" height="32" rx="4" fill="#f8f8f8" stroke="#e4e4e4" stroke-width="1"/>
-        <text x="240" y="74" text-anchor="middle" dominant-baseline="central"
+        <rect x="218" y="58" width="164" height="32" rx="4" fill="#f8f8f8" stroke="#e4e4e4" stroke-width="1"/>
+        <text x="300" y="74" text-anchor="middle" dominant-baseline="central"
               fill="#333" font-size="12">load_profile</text>
 
         <!-- run_lp_optimizer -->
-        <rect x="135" y="116" width="210" height="32" rx="4" fill="#f8f8f8" stroke="#e4e4e4" stroke-width="1"/>
-        <text x="240" y="132" text-anchor="middle" dominant-baseline="central"
+        <rect x="195" y="116" width="210" height="32" rx="4" fill="#f8f8f8" stroke="#e4e4e4" stroke-width="1"/>
+        <text x="300" y="132" text-anchor="middle" dominant-baseline="central"
               fill="#333" font-size="12">run_lp_optimizer</text>
 
         <!-- run_monte_carlo -->
-        <rect x="140" y="174" width="200" height="32" rx="4" fill="#f8f8f8" stroke="#e4e4e4" stroke-width="1"/>
-        <text x="240" y="190" text-anchor="middle" dominant-baseline="central"
+        <rect x="200" y="174" width="200" height="32" rx="4" fill="#f8f8f8" stroke="#e4e4e4" stroke-width="1"/>
+        <text x="300" y="190" text-anchor="middle" dominant-baseline="central"
               fill="#333" font-size="12">run_monte_carlo</text>
 
-        <!-- Fan-out: section_a, section_b, section_c -->
-        <rect x="18"  y="244" width="134" height="32" rx="4" fill="#f8f8f8" stroke="#e4e4e4" stroke-width="1"/>
-        <text x="85"  y="260" text-anchor="middle" dominant-baseline="central"
-              fill="#333" font-size="12">run_section_a</text>
+        <!-- Fan-out: standard, contribution, withdrawal -->
+        <rect x="26"  y="244" width="175" height="32" rx="4" fill="#f8f8f8" stroke="#e4e4e4" stroke-width="1"/>
+        <text x="113" y="260" text-anchor="middle" dominant-baseline="central"
+              fill="#333" font-size="10">run_standard_explanation</text>
 
-        <rect x="173" y="244" width="134" height="32" rx="4" fill="#f8f8f8" stroke="#e4e4e4" stroke-width="1"/>
-        <text x="240" y="260" text-anchor="middle" dominant-baseline="central"
-              fill="#333" font-size="12">run_section_b</text>
+        <rect x="213" y="244" width="175" height="32" rx="4" fill="#f8f8f8" stroke="#e4e4e4" stroke-width="1"/>
+        <text x="300" y="260" text-anchor="middle" dominant-baseline="central"
+              fill="#333" font-size="10">run_contribution_explanation</text>
 
-        <rect x="328" y="244" width="134" height="32" rx="4" fill="#f8f8f8" stroke="#e4e4e4" stroke-width="1"/>
-        <text x="395" y="260" text-anchor="middle" dominant-baseline="central"
-              fill="#333" font-size="12">run_section_c</text>
+        <rect x="400" y="244" width="175" height="32" rx="4" fill="#f8f8f8" stroke="#e4e4e4" stroke-width="1"/>
+        <text x="487" y="260" text-anchor="middle" dominant-baseline="central"
+              fill="#333" font-size="10">run_withdrawal_explanation</text>
 
         <!-- synthesize_explanation -->
-        <rect x="108" y="314" width="264" height="32" rx="4" fill="#f8f8f8" stroke="#e4e4e4" stroke-width="1"/>
-        <text x="240" y="330" text-anchor="middle" dominant-baseline="central"
+        <rect x="168" y="314" width="264" height="32" rx="4" fill="#f8f8f8" stroke="#e4e4e4" stroke-width="1"/>
+        <text x="300" y="330" text-anchor="middle" dominant-baseline="central"
               fill="#333" font-size="12">synthesize_explanation</text>
 
         <!-- format_output -->
-        <rect x="158" y="380" width="164" height="32" rx="4" fill="#f8f8f8" stroke="#e4e4e4" stroke-width="1"/>
-        <text x="240" y="396" text-anchor="middle" dominant-baseline="central"
+        <rect x="218" y="380" width="164" height="32" rx="4" fill="#f8f8f8" stroke="#e4e4e4" stroke-width="1"/>
+        <text x="300" y="396" text-anchor="middle" dominant-baseline="central"
               fill="#333" font-size="12">format_output</text>
 
         <!-- END -->
-        <ellipse cx="240" cy="436" rx="26" ry="14" fill="#1a1a1a"/>
-        <text x="240" y="436" text-anchor="middle" dominant-baseline="central"
+        <ellipse cx="300" cy="436" rx="26" ry="14" fill="#1a1a1a"/>
+        <text x="300" y="436" text-anchor="middle" dominant-baseline="central"
               fill="white" font-size="11" font-weight="500">END</text>
       </svg>
     </div>
+    <p style="text-align:center; font-size:0.78rem; color:#aaa; margin-top:14px;">
+      &#8212;&#8212; conditional on <code>mc_result</code> via <code>route_after_mc</code>
+    </p>
   </section>
 
   <section>
@@ -194,7 +205,7 @@
             <span class="badge">reducer</span>
           </td>
           <td><code>list[AnalysisSection]</code></td>
-          <td class="muted">run_section_a · b · c</td>
+          <td class="muted">run_standard_explanation<br>run_contribution_explanation<br>run_withdrawal_explanation</td>
         </tr>
         <tr>
           <td><code>explanation</code></td>
@@ -221,6 +232,11 @@
         </tr>
       </thead>
       <tbody>
+        <tr>
+          <td><code>route_after_mc</code></td>
+          <td class="muted">nodes/routing.py</td>
+          <td class="muted">Decides which explanation branches run based on <code>mc_result</code>. The only place to change when branching conditions evolve.</td>
+        </tr>
         <tr>
           <td><code>GatewayClient</code></td>
           <td class="muted">services/gateway.py</td>
