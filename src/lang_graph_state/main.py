@@ -1,10 +1,14 @@
 import asyncio
+from lang_graph_state.graph import build_graph
 
 
 async def amain() -> None:
-    import uuid
-    from langgraph.checkpoint.memory import MemorySaver
-    pass
+    graph = await build_graph()
+    result = await graph.ainvoke(
+        {"fs_req_id": "test-001"},
+        config={"configurable": {"thread_id": "test-001"}},
+    )
+    print(result)
 
 
 def main() -> None:
