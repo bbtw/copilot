@@ -1,37 +1,16 @@
-from typing import Optional
 from pydantic import BaseModel
 
+from lang_graph_state.sources.customer_profile import CustomerProfileResult
+from lang_graph_state.sources.insights import InsightsResult
+from lang_graph_state.sources.monte_carlo import MonteCarloResult
+from lang_graph_state.sources.optimizer import OptimizerResult
+from lang_graph_state.synthesis.parsing import SynthesisOutput
 
-# --- Source Models ---
-
-class CustomerProfileResult(BaseModel):
-    pass
-
-
-class InsightsResult(BaseModel):
-    pass
-
-
-class OptimizerResult(BaseModel):
-    pass
-
-
-class MonteCarloResult(BaseModel):
-    pass
-
-
-# --- Synthesis Output ---
-
-class SynthesisOutput(BaseModel):
-    pass
-
-
-# --- Graph State ---
 
 class GraphState(BaseModel):
     fs_req_id: str
-    customer_profile: Optional[CustomerProfileResult] = None
-    insights: Optional[InsightsResult] = None
-    optimizer: Optional[OptimizerResult] = None
-    monte_carlo: Optional[MonteCarloResult] = None
-    synthesis: Optional[SynthesisOutput] = None
+    customer_profile: CustomerProfileResult | None = None
+    insights: InsightsResult | None = None
+    optimizer: OptimizerResult | None = None
+    monte_carlo: MonteCarloResult | None = None
+    synthesis: SynthesisOutput | None = None

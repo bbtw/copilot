@@ -1,59 +1,40 @@
-from typing import Callable, Awaitable
+from __future__ import annotations
+
+from typing import Awaitable, Callable
+
 import httpx
 
 from lang_graph_state.errors import SourceFetchError
-from lang_graph_state.state import (
-    GraphState,
-    CustomerProfileResult,
-    InsightsResult,
-    OptimizerResult,
-    MonteCarloResult,
-)
+from lang_graph_state.request_spec import SourceDefinition
+from lang_graph_state.state import GraphState
 from lang_graph_state.token_manager import TokenManager
 
 Node = Callable[[GraphState], Awaitable[dict]]
 
 
-def make_customer_profile_node(client: httpx.AsyncClient, token_manager: TokenManager) -> Node:
+def make_fetch_node(
+    source: SourceDefinition,
+    client: httpx.AsyncClient,
+    token_manager: TokenManager,
+) -> Node:
     async def node(state: GraphState) -> dict:
         try:
+            spec = source.build_request(state)
             token = await token_manager.get_token()
-            # TODO: replace with real endpoint and parsing
-            _ = token
-            return {"customer_profile": CustomerProfileResult()}
+            headers = dict(spec.headers or {})
+            headers["Authorization"] = f"Bearer {token}"
+            headers["fsreqid"] = state.fs_req_id
+            response = await client.request(
+                method=spec.method,
+                url=spec.path,
+                json=spec.json,
+                params=spec.params,
+                headers=headers,
+            )
+            response.raise_for_status()
+            parsed = source.parse_response(response)
+            return {source.name: parsed}
         except Exception as e:
-            raise SourceFetchError("customer_profile", e) from e
-    return node
+            raise SourceFetchError(source.name, e) from e
 
-
-def make_insights_node(client: httpx.AsyncClient, token_manager: TokenManager) -> Node:
-    async def node(state: GraphState) -> dict:
-        try:
-            token = await token_manager.get_token()
-            _ = token
-            return {"insights": InsightsResult()}
-        except Exception as e:
-            raise SourceFetchError("insights", e) from e
-    return node
-
-
-def make_optimizer_node(client: httpx.AsyncClient, token_manager: TokenManager) -> Node:
-    async def node(state: GraphState) -> dict:
-        try:
-            token = await token_manager.get_token()
-            _ = token
-            return {"optimizer": OptimizerResult()}
-        except Exception as e:
-            raise SourceFetchError("optimizer", e) from e
-    return node
-
-
-def make_monte_carlo_node(client: httpx.AsyncClient, token_manager: TokenManager) -> Node:
-    async def node(state: GraphState) -> dict:
-        try:
-            token = await token_manager.get_token()
-            _ = token
-            return {"monte_carlo": MonteCarloResult()}
-        except Exception as e:
-            raise SourceFetchError("monte_carlo", e) from e
     return node
