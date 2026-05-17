@@ -1,14 +1,9 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
 
 import httpx
 from pydantic import BaseModel
 
 from lang_graph_state.request_spec import RequestSpec, SourceDefinition
-
-if TYPE_CHECKING:
-    from lang_graph_state.state import GraphState
+from lang_graph_state.state import GraphState
 
 
 class OptimizerResult(BaseModel):
