@@ -72,7 +72,7 @@ async def test_build_graph_runs_all_sources_then_synthesis(monkeypatch: pytest.M
     for req in requests:
         by_host.setdefault(req.url.host, []).append(req)
 
-    # 5 TokenManagers each POST once to oauth during initialize()
+    # 5 OAuthIdentities each POST once to oauth during initialize()
     assert len(by_host["oauth.test"]) == 5
     for host in SOURCE_HOSTS:
         assert len(by_host[host]) == 1, f"expected exactly one call to {host}"

@@ -12,7 +12,7 @@ class FakeOutput(BaseModel):
     answer: str
 
 
-class FakeTokenManager:
+class FakeOAuthIdentity:
     def __init__(self, token: str = "test-token") -> None:
         self.token = token
 
@@ -53,7 +53,7 @@ async def test_synthesis_node_happy_path_returns_parsed_under_synthesis() -> Non
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://x")
     node = make_synthesis_node(
         client,
-        FakeTokenManager("tok-syn"),
+        FakeOAuthIdentity("tok-syn"),
         "anthropic",
         "claude-opus-4-7",
         build_request,
@@ -96,7 +96,7 @@ async def test_synthesis_node_wraps_http_error_in_synthesis_error() -> None:
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://x")
     node = make_synthesis_node(
         client,
-        FakeTokenManager(),
+        FakeOAuthIdentity(),
         "anthropic",
         "claude-opus-4-7",
         build_request,
@@ -125,7 +125,7 @@ async def test_synthesis_node_wraps_parse_error_in_synthesis_error() -> None:
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://x")
     node = make_synthesis_node(
         client,
-        FakeTokenManager(),
+        FakeOAuthIdentity(),
         "anthropic",
         "claude-opus-4-7",
         build_request,

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable
+from typing import Any, Callable, Protocol
 
 import httpx
 from pydantic import BaseModel
 
-if TYPE_CHECKING:
-    from lang_graph_state.state import GraphState
+
+class RequestState(Protocol):
+    fs_req_id: str
 
 
 @dataclass(frozen=True)
@@ -23,5 +24,5 @@ class RequestSpec:
 class SourceDefinition:
     name: str
     result_model: type[BaseModel]
-    build_request: Callable[[GraphState], RequestSpec]
+    build_request: Callable[[RequestState], RequestSpec]
     parse_response: Callable[[httpx.Response], BaseModel]

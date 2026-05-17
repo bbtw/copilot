@@ -14,7 +14,7 @@ then uses an LLM to synthesise the results into a response.
 The LangGraph `StateGraph` that orchestrates the full fetch → synthesise pipeline.
 Acquired via `build_graph(...)` as an **async context manager**. Entering the
 context constructs the six owned `HTTP Client`s (see below) and initialises every
-`TokenManager`; exiting closes all clients cleanly. Callers must use the context
+`OAuthIdentity`; exiting closes all clients cleanly. Callers must use the context
 manager — the compiled graph is not safely usable outside it.
 
 ### Static Source
@@ -35,12 +35,16 @@ Built with the same pattern as a fetch node: two pure callables —
 and error wrapping. There is no `SynthesisDefinition` bundle because there is
 only one synthesis node.
 
-### TokenManager
+### OAuthIdentity
 
-A per-API component responsible for obtaining and caching a bearer token from the
-shared OAuth token server. Tokens are cached for a fixed TTL (15 minutes).
-Each static source has its own `TokenManager` backed by its own credentials
-(username/password from environment variables).
+A single credentialed identity that vends a bearer token for one upstream API.
+Each instance is bound to one username/password pair and to the shared OAuth
+token server; it POSTs those credentials to mint a token, caches the result for
+a fixed TTL (15 minutes), and serialises concurrent refreshes for that one
+identity behind its own `asyncio.Lock`. It does not manage other identities, a
+pool of tokens, or the HTTP transport — the OAuth `HTTP Client` is shared in
+from outside. Each static source has its own `OAuthIdentity`; the LLM Gateway
+has one too.
 
 ### HTTP Client
 
@@ -50,14 +54,14 @@ six clients in total:
 - One per Static Source (4 total), each bound to that source's base URL and
   injected into the source's fetch node via closure.
 - One for the LLM Gateway, injected into the synthesis node.
-- One shared OAuth client, injected into every `TokenManager`. All TokenManagers
+- One shared OAuth client, injected into every `OAuthIdentity`. All identities
   hit the same OAuth token server, so one connection pool is sufficient.
 
 Clients are constructed once at startup and reused across invocations.
 
 ### Node Factory
 
-A function that accepts a `Source Definition`, an HTTP client, and a `TokenManager`,
+A function that accepts a `Source Definition`, an HTTP client, and an `OAuthIdentity`,
 and returns an async LangGraph node function. A single factory plus one `Source
 Definition` per source replaces having four near-identical per-source factory
 functions. Enables isolated unit testing by accepting fakes at construction time.
@@ -67,6 +71,13 @@ functions. Enables isolated unit testing by accepting fakes at construction time
 A flat Pydantic model with one typed field per static source plus the synthesis
 output. Each fetch node writes exactly one field. The synthesis node reads all
 source fields and writes the final output field.
+
+### Request State
+
+The small interface request builders need from `Graph State`. Today it contains
+`fs_req_id`. Source modules depend on `Request State`, not the concrete
+`GraphState`, so `Graph State` can own typed source fields without creating an
+import cycle back into the source modules.
 
 ### Source Model
 
@@ -85,7 +96,7 @@ across separate factory functions.
 
 The two callables are **pure functions**:
 
-- `build_request(state) -> RequestSpec` returns a transport-agnostic value
+- `build_request(state: RequestState) -> RequestSpec` returns a transport-agnostic value
   object (`method`, `path`, optional `json` / `params` / `headers`). It does
   not see the bearer token; the factory injects `Authorization` and `fsreqid`
   headers after the spec is built.
@@ -94,7 +105,7 @@ The two callables are **pure functions**:
   it needs to.
 
 Keeping both pure means each source's request shape and response parsing are
-testable without a network, a TokenManager, or any factory plumbing.
+testable without a network, an OAuthIdentity, or any factory plumbing.
 
 ### Synthesis Output
 
@@ -104,7 +115,7 @@ A structured Pydantic model produced by the LLM synthesis node. Returned on succ
 
 A REST API used for synthesis. Called with a JSON body of shape:
 `{ model: { provider, id }, prompt_spec: { messages: [{ role, content }] } }`.
-Accessed via the same `httpx.AsyncClient` + `TokenManager` pattern as the static
+Accessed via the same `httpx.AsyncClient` + `OAuthIdentity` pattern as the static
 sources. The model `provider` and `id` are supplied via environment variables.
 
 ### CheckpointerFactory

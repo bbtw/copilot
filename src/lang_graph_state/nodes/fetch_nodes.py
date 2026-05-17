@@ -4,9 +4,9 @@ from typing import Awaitable, Callable
 import httpx
 
 from lang_graph_state.errors import SourceFetchError
+from lang_graph_state.oauth_identity import OAuthIdentity
 from lang_graph_state.request_spec import SourceDefinition
 from lang_graph_state.state import GraphState
-from lang_graph_state.token_manager import TokenManager
 
 Node = Callable[[GraphState], Awaitable[dict]]
 
@@ -14,12 +14,12 @@ Node = Callable[[GraphState], Awaitable[dict]]
 def make_fetch_node(
     source: SourceDefinition,
     client: httpx.AsyncClient,
-    token_manager: TokenManager,
+    identity: OAuthIdentity,
 ) -> Node:
     async def node(state: GraphState) -> dict:
         try:
             spec = source.build_request(state)
-            token = await token_manager.get_token()
+            token = await identity.get_token()
             headers = dict(spec.headers or {})
             headers["Authorization"] = f"Bearer {token}"
             headers["fsreqid"] = state.fs_req_id

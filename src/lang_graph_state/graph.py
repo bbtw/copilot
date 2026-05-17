@@ -15,7 +15,7 @@ from lang_graph_state.sources import ALL_SOURCES
 from lang_graph_state.state import GraphState
 from lang_graph_state.synthesis.parsing import parse_synthesis_response
 from lang_graph_state.synthesis.prompt import build_synthesis_request
-from lang_graph_state.token_manager import TokenManager
+from lang_graph_state.oauth_identity import OAuthIdentity
 
 
 @asynccontextmanager
@@ -34,28 +34,28 @@ async def build_graph(
     }
     llm_client = httpx.AsyncClient(base_url=s.llm_gateway_url, transport=transport)
 
-    managers = {
-        "customer_profile": TokenManager(s.oauth_token_url, s.customer_profile_user, s.customer_profile_pass, oauth_client),
-        "insights": TokenManager(s.oauth_token_url, s.insights_user, s.insights_pass, oauth_client),
-        "optimizer": TokenManager(s.oauth_token_url, s.optimizer_user, s.optimizer_pass, oauth_client),
-        "monte_carlo": TokenManager(s.oauth_token_url, s.monte_carlo_user, s.monte_carlo_pass, oauth_client),
-        "llm_gateway": TokenManager(s.oauth_token_url, s.llm_gateway_user, s.llm_gateway_pass, oauth_client),
+    identities = {
+        "customer_profile": OAuthIdentity(s.oauth_token_url, s.customer_profile_user, s.customer_profile_pass, oauth_client),
+        "insights": OAuthIdentity(s.oauth_token_url, s.insights_user, s.insights_pass, oauth_client),
+        "optimizer": OAuthIdentity(s.oauth_token_url, s.optimizer_user, s.optimizer_pass, oauth_client),
+        "monte_carlo": OAuthIdentity(s.oauth_token_url, s.monte_carlo_user, s.monte_carlo_pass, oauth_client),
+        "llm_gateway": OAuthIdentity(s.oauth_token_url, s.llm_gateway_user, s.llm_gateway_pass, oauth_client),
     }
 
     try:
-        await asyncio.gather(*(m.initialize() for m in managers.values()))
+        await asyncio.gather(*(i.initialize() for i in identities.values()))
 
         builder = StateGraph(GraphState)
         for source in ALL_SOURCES:
             builder.add_node(
                 source.name,
-                make_fetch_node(source, source_clients[source.name], managers[source.name]),
+                make_fetch_node(source, source_clients[source.name], identities[source.name]),
             )
         builder.add_node(
             "synthesis",
             make_synthesis_node(
                 llm_client,
-                managers["llm_gateway"],
+                identities["llm_gateway"],
                 s.llm_model_provider,
                 s.llm_model_id,
                 build_synthesis_request,

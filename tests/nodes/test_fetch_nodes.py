@@ -12,7 +12,7 @@ class FakeResult(BaseModel):
     value: str
 
 
-class FakeTokenManager:
+class FakeOAuthIdentity:
     def __init__(self, token: str = "test-token") -> None:
         self.token = token
 
@@ -59,7 +59,7 @@ async def test_fetch_node_happy_path_returns_parsed_under_source_name() -> None:
         return httpx.Response(200, json={"v": "hello"})
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://x")
-    node = make_fetch_node(_make_source(), client, FakeTokenManager("tok-abc"))
+    node = make_fetch_node(_make_source(), client, FakeOAuthIdentity("tok-abc"))
 
     result = await node(_state())
 
@@ -83,7 +83,7 @@ async def test_fetch_node_wraps_http_error_in_source_fetch_error() -> None:
         return httpx.Response(500, json={"error": "boom"})
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://x")
-    node = make_fetch_node(_make_source(name="customer_profile"), client, FakeTokenManager())
+    node = make_fetch_node(_make_source(name="customer_profile"), client, FakeOAuthIdentity())
 
     with pytest.raises(SourceFetchError) as exc:
         await node(_state())
@@ -106,7 +106,7 @@ async def test_fetch_node_wraps_parse_error_in_source_fetch_error() -> None:
     node = make_fetch_node(
         _make_source(parse_response=parse_response, name="insights"),
         client,
-        FakeTokenManager(),
+        FakeOAuthIdentity(),
     )
 
     with pytest.raises(SourceFetchError) as exc:
