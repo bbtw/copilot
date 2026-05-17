@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>lang-graph-state · Architecture</title>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1e2d45;
+    --accent: #3b82f6;
+    --accent2: #6366f1;
+    --accent3: #10b981;
+    --accent4: #f59e0b;
+    --accent5: #ec4899;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --node-source: #1e3a5f;
+    --node-source-border: #3b82f6;
+    --node-synth: #1a1f3a;
+    --node-synth-border: #6366f1;
+    --node-state: #0f2a1f;
+    --node-state-border: #10b981;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+  }
+
+  header {
+    padding: 2.5rem 3rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(135deg, #0a0e1a 0%, #111827 100%);
+  }
+
+  header h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    background: linear-gradient(90deg, #60a5fa, #818cf8, #34d399);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  header p {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-top: 0.4rem;
+  }
+
+  nav {
+    display: flex;
+    gap: 0.5rem;
+    padding: 1rem 3rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  nav button {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 0.45rem 1.1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  nav button.active,
+  nav button:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .tab { display: none; padding: 2.5rem 3rem; }
+  .tab.active { display: block; }
+
+  /* ─── SECTION 1: Graph Flow ─── */
+
+  .section-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 0.4rem;
+  }
+
+  .section-sub {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 2rem;
+  }
+
+  /* Animated graph canvas */
+  #graph-canvas-wrapper {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Background grid */
+  #graph-canvas-wrapper::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.4;
+  }
+
+  .graph-layout {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 1.5rem 2rem;
+    align-items: center;
+  }
+
+  /* START node */
+  .g-start {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: center;
+  }
+
+  /* Source nodes row */
+  .g-sources {
+    grid-column: 1 / 4;
+    grid-row: 2;
+    display: flex;
+    justify-content: space-around;
+    gap: 1rem;
+  }
+
+  /* Synthesis node */
+  .g-synthesis {
+    grid-column: 2;
+    grid-row: 3;
+    justify-self: center;
+  }
+
+  /* END node */
+  .g-end {
+    grid-column: 2;
+    grid-row: 4;
+    justify-self: center;
+  }
+
+  .gnode {
+    position: relative;
+    border-radius: 10px;
+    padding: 0.8rem 1.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-align: center;
+    z-index: 2;
+    min-width: 130px;
+  }
+
+  .gnode-start, .gnode-end {
+    background: #0f172a;
+    border: 2px solid var(--muted);
+    color: var(--muted);
+    border-radius: 999px;
+    padding: 0.5rem 1.5rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    min-width: 0;
+  }
+
+  .gnode-source {
+    background: var(--node-source);
+    border: 2px solid var(--node-source-border);
+    color: #93c5fd;
+    box-shadow: 0 0 16px rgba(59,130,246,0.15);
+    animation: pulse-blue 3s ease-in-out infinite;
+  }
+
+  .gnode-synth {
+    background: var(--node-synth);
+    border: 2px solid var(--node-synth-border);
+    color: #a5b4fc;
+    box-shadow: 0 0 20px rgba(99,102,241,0.2);
+    animation: pulse-indigo 3s ease-in-out infinite;
+    min-width: 160px;
+  }
+
+  @keyframes pulse-blue {
+    0%, 100% { box-shadow: 0 0 12px rgba(59,130,246,0.15); }
+    50% { box-shadow: 0 0 28px rgba(59,130,246,0.4); }
+  }
+
+  @keyframes pulse-indigo {
+    0%, 100% { box-shadow: 0 0 14px rgba(99,102,241,0.2); }
+    50% { box-shadow: 0 0 32px rgba(99,102,241,0.5); }
+  }
+
+  .gnode-label {
+    font-size: 0.72rem;
+    font-weight: 400;
+    color: var(--muted);
+    margin-top: 0.25rem;
+  }
+
+  /* SVG arrows between nodes */
+  .graph-arrows {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* State fields table */
+  .state-table {
+    margin-top: 2rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .state-table-header {
+    background: var(--surface2);
+    padding: 0.9rem 1.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--accent3);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .state-table table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.83rem;
+  }
+
+  .state-table th {
+    text-align: left;
+    padding: 0.65rem 1.4rem;
+    color: var(--muted);
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .state-table td {
+    padding: 0.65rem 1.4rem;
+    border-bottom: 1px solid var(--border);
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.8rem;
+  }
+
+  .state-table tr:last-child td { border-bottom: none; }
+
+  .state-table tr:hover td { background: var(--surface2); }
+
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .badge-read { background: rgba(59,130,246,0.2); color: #93c5fd; }
+  .badge-write { background: rgba(16,185,129,0.2); color: #6ee7b7; }
+  .badge-both { background: rgba(245,158,11,0.2); color: #fcd34d; }
+  .badge-type { background: rgba(100,116,139,0.15); color: var(--muted); }
+
+  /* Execution timeline */
+  .timeline {
+    margin-top: 2rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+  }
+
+  .timeline-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--accent4);
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .tl-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.6rem;
+    font-size: 0.8rem;
+  }
+
+  .tl-label {
+    width: 130px;
+    flex-shrink: 0;
+    color: var(--muted);
+    font-family: monospace;
+    font-size: 0.75rem;
+  }
+
+  .tl-bar {
+    height: 26px;
+    border-radius: 5px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    padding: 0 0.6rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: white;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .tl-bar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(255,255,255,0.08) 0%, transparent 60%);
+  }
+
+  .tl-note {
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+
+  .tl-parallel {
+    margin-left: 0;
+    width: 320px;
+    background: linear-gradient(90deg, #1e3a5f, #1e3a5f);
+    border: 1px solid var(--node-source-border);
+  }
+
+  .tl-synth-bar {
+    margin-left: 0;
+    width: 200px;
+    background: linear-gradient(90deg, #1a1f3a, #2d1f5a);
+    border: 1px solid var(--node-synth-border);
+  }
+
+  .tl-seq {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    color: #64748b;
+    margin-left: 140px;
+    margin-bottom: 1.2rem;
+  }
+
+  .tl-arrow { color: var(--accent4); }
+
+  /* ─── SECTION 2: HTTP + Token ─── */
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-top: 0;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 1rem 1.4rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    font-size: 0.9rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .card-body { padding: 1.4rem; }
+
+  /* Client topology diagram */
+  .client-diagram {
+    position: relative;
+  }
+
+  .cd-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .cd-box {
+    border-radius: 6px;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-family: monospace;
+    white-space: nowrap;
+  }
+
+  .cd-source { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.4); color: #93c5fd; }
+  .cd-llm { background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.4); color: #a5b4fc; }
+  .cd-oauth { background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.4); color: #6ee7b7; }
+  .cd-tm { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); color: #fcd34d; font-size: 0.7rem; }
+  .cd-arrow { color: var(--muted); font-size: 0.9rem; flex-shrink: 0; }
+  .cd-ext { background: rgba(100,116,139,0.1); border: 1px solid rgba(100,116,139,0.3); color: var(--muted); font-size: 0.72rem; }
+
+  .cd-divider {
+    border: none;
+    border-top: 1px dashed var(--border);
+    margin: 0.8rem 0;
+  }
+
+  .cd-legend {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .cd-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+
+  .cd-legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  /* Token lifecycle diagram */
+  .token-lifecycle {
+    position: relative;
+  }
+
+  .tl2-phase {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    align-items: flex-start;
+  }
+
+  .tl2-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+  }
+
+  .tl2-content {}
+
+  .tl2-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 0.2rem;
+  }
+
+  .tl2-desc {
+    font-size: 0.75rem;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .tl2-code {
+    font-family: monospace;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.65rem 0.9rem;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin-top: 0.5rem;
+    line-height: 1.6;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  /* Error panel */
+  .error-panel {
+    margin-top: 1.5rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .error-card {
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    border-left: 3px solid;
+  }
+
+  .error-card.fetch { border-color: #ef4444; }
+  .error-card.synth { border-color: #f59e0b; }
+
+  .error-card-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+  }
+
+  .error-card.fetch .error-card-title { color: #f87171; }
+  .error-card.synth .error-card-title { color: #fbbf24; }
+
+  .error-card-desc {
+    font-size: 0.75rem;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .cn-repeat {
+    margin-top: 1.2rem;
+    padding: 0.85rem 1.05rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.76rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .cn-repeat strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .cn-repeat code {
+    color: #cbd5e1;
+  }
+
+  .flow-diagram {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.75rem;
+  }
+
+  .flow-stage-title {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0.2rem 0 0.75rem;
+  }
+
+  .flow-row {
+    display: grid;
+    grid-template-columns: 1fr 44px 1fr 44px 1fr;
+    gap: 0.5rem;
+    align-items: stretch;
+  }
+
+  .flow-box {
+    border: 1.5px solid;
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+    min-height: 92px;
+  }
+
+  .flow-box-title {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-bottom: 0.45rem;
+  }
+
+  .flow-box-desc {
+    color: var(--muted);
+    font-size: 0.74rem;
+    line-height: 1.45;
+  }
+
+  .flow-source {
+    border-color: rgba(16,185,129,0.42);
+    background: rgba(16,185,129,0.08);
+  }
+  .flow-source .flow-box-title { color: #6ee7b7; }
+
+  .flow-client {
+    border-color: rgba(59,130,246,0.42);
+    background: rgba(59,130,246,0.08);
+  }
+  .flow-client .flow-box-title { color: #93c5fd; }
+
+  .flow-identity {
+    border-color: rgba(245,158,11,0.42);
+    background: rgba(245,158,11,0.08);
+  }
+  .flow-identity .flow-box-title { color: #fcd34d; }
+
+  .flow-node {
+    border-color: rgba(99,102,241,0.5);
+    background: rgba(99,102,241,0.1);
+  }
+  .flow-node .flow-box-title { color: #c7d2fe; }
+
+  .flow-state {
+    border-color: rgba(236,72,153,0.42);
+    background: rgba(236,72,153,0.08);
+  }
+  .flow-state .flow-box-title { color: #f9a8d4; }
+
+  .flow-arrow {
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+  }
+
+  .flow-node-wrap {
+    margin: 1rem 0;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .flow-runtime {
+    display: grid;
+    grid-template-columns: 1fr 44px 1fr 44px 1fr 44px 1fr;
+    gap: 0.5rem;
+    align-items: stretch;
+  }
+
+  .flow-note {
+    margin-top: 1rem;
+    padding: 0.85rem 1rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.76rem;
+    line-height: 1.55;
+    color: var(--muted);
+  }
+
+  .flow-note strong {
+    color: var(--text);
+  }
+
+  @media (max-width: 900px) {
+    .flow-row,
+    .flow-runtime {
+      grid-template-columns: 1fr;
+    }
+
+    .flow-arrow {
+      transform: rotate(90deg);
+      min-height: 24px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>lang-graph-state</h1>
+  <p>Architecture reference · fetch → synthesise pipeline</p>
+</header>
+
+<nav>
+  <button class="active" onclick="showTab('graph')">Graph &amp; State Flow</button>
+  <button onclick="showTab('http')">API Fetch Object Flow</button>
+</nav>
+
+<!-- ══════════════════════════════════════════════
+     TAB 1: Graph & State Flow
+     ══════════════════════════════════════════════ -->
+<div id="tab-graph" class="tab active">
+
+  <p class="section-title">LangGraph Execution Flow</p>
+  <p class="section-sub">Four static sources run in parallel off <code>START</code>; synthesis waits for all four before writing the final output.</p>
+
+  <div id="graph-canvas-wrapper">
+
+    <!-- SVG connectors drawn by JS after layout -->
+    <svg class="graph-arrows" id="arrows"></svg>
+
+    <div class="graph-layout" id="graph-layout">
+
+      <div class="g-start">
+        <div class="gnode gnode-start" id="n-start">START</div>
+      </div>
+
+      <div class="g-sources" id="g-sources">
+        <div class="gnode gnode-source" id="n-cp">
+          customer_profile
+          <div class="gnode-label">GET /  →  CustomerProfileResult</div>
+        </div>
+        <div class="gnode gnode-source" id="n-ins">
+          insights
+          <div class="gnode-label">GET /  →  InsightsResult</div>
+        </div>
+        <div class="gnode gnode-source" id="n-opt">
+          optimizer
+          <div class="gnode-label">GET /  →  OptimizerResult</div>
+        </div>
+        <div class="gnode gnode-source" id="n-mc">
+          monte_carlo
+          <div class="gnode-label">GET /  →  MonteCarloResult</div>
+        </div>
+      </div>
+
+      <div class="g-synthesis">
+        <div class="gnode gnode-synth" id="n-synth">
+          synthesis
+          <div class="gnode-label">POST /llm-gateway  →  SynthesisOutput</div>
+        </div>
+      </div>
+
+      <div class="g-end">
+        <div class="gnode gnode-start" id="n-end">END</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Execution timeline -->
+  <div class="timeline">
+    <div class="timeline-title">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Execution Timeline (one invocation)
+    </div>
+
+    <div class="tl-row">
+      <div class="tl-label">graph.ainvoke</div>
+      <div class="tl-bar" style="width:520px;background:linear-gradient(90deg,#1e2d45,#1e2d45);border:1px solid #334155;">
+        full invocation
+      </div>
+    </div>
+
+    <div class="tl-seq">
+      <span>Token check (each manager)</span>
+      <span class="tl-arrow">→</span>
+      <span>Parallel fetch</span>
+      <span class="tl-arrow">→</span>
+      <span>Synthesis</span>
+    </div>
+
+    <div class="tl-row">
+      <div class="tl-label">customer_profile</div>
+      <div class="tl-bar tl-parallel" style="width:160px;">fetch node</div>
+      <span class="tl-note">↘ concurrent</span>
+    </div>
+    <div class="tl-row">
+      <div class="tl-label">insights</div>
+      <div class="tl-bar tl-parallel" style="width:200px;">fetch node</div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-label">optimizer</div>
+      <div class="tl-bar tl-parallel" style="width:140px;">fetch node</div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-label">monte_carlo</div>
+      <div class="tl-bar tl-parallel" style="width:180px;">fetch node</div>
+    </div>
+
+    <div class="tl-row" style="margin-top:0.6rem">
+      <div class="tl-label">synthesis</div>
+      <div class="tl-bar tl-synth-bar" style="margin-left:210px">LLM call</div>
+      <span class="tl-note">↙ waits for all four</span>
+    </div>
+  </div>
+
+  <!-- GraphState table -->
+  <div class="state-table">
+    <div class="state-table-header">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="3"/></svg>
+      GraphState — flat Pydantic model
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Written by</th>
+          <th>Read by</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>fs_req_id</code></td>
+          <td><span class="badge badge-type">str</span></td>
+          <td>caller (input)</td>
+          <td>all nodes</td>
+          <td>doubles as LangGraph <code>thread_id</code> &amp; <code>fsreqid</code> header</td>
+        </tr>
+        <tr>
+          <td><code>customer_profile</code></td>
+          <td><span class="badge badge-type">CustomerProfileResult | None</span></td>
+          <td><span class="badge badge-write">customer_profile node</span></td>
+          <td><span class="badge badge-read">synthesis</span></td>
+          <td>None until fetch completes</td>
+        </tr>
+        <tr>
+          <td><code>insights</code></td>
+          <td><span class="badge badge-type">InsightsResult | None</span></td>
+          <td><span class="badge badge-write">insights node</span></td>
+          <td><span class="badge badge-read">synthesis</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><code>optimizer</code></td>
+          <td><span class="badge badge-type">OptimizerResult | None</span></td>
+          <td><span class="badge badge-write">optimizer node</span></td>
+          <td><span class="badge badge-read">synthesis</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><code>monte_carlo</code></td>
+          <td><span class="badge badge-type">MonteCarloResult | None</span></td>
+          <td><span class="badge badge-write">monte_carlo node</span></td>
+          <td><span class="badge badge-read">synthesis</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><code>synthesis</code></td>
+          <td><span class="badge badge-type">SynthesisOutput | None</span></td>
+          <td><span class="badge badge-write">synthesis node</span></td>
+          <td>caller (output)</td>
+          <td>final result of the run</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Error paths -->
+  <div class="error-panel">
+    <div class="error-card fetch">
+      <div class="error-card-title">SourceFetchError</div>
+      <div class="error-card-desc">
+        Raised by any fetch node on HTTP error or parse failure. Carries <code>source: str</code> and <code>cause: Exception</code>.
+        The graph aborts immediately — synthesis is skipped. The caller must catch this and mint a new <code>fs_req_id</code> to retry.
+      </div>
+    </div>
+    <div class="error-card synth">
+      <div class="error-card-title">SynthesisError</div>
+      <div class="error-card-desc">
+        Raised by the synthesis node on LLM gateway failure or parse error. Wraps the root <code>cause</code>.
+        All four source results were already written to state at this point, but recovery still requires a full restart.
+      </div>
+    </div>
+  </div>
+
+</div><!-- /tab-graph -->
+
+
+<!-- ══════════════════════════════════════════════
+     TAB 2: API Fetch Object Flow
+     ══════════════════════════════════════════════ -->
+<div id="tab-http" class="tab">
+
+  <p class="section-title">API Fetch Object Flow</p>
+  <p class="section-sub">Read this as two moments in the program: first <code>build_graph</code> creates long-lived objects, then LangGraph calls the captured node for each request. The example is <code>customer_profile</code>; the other source nodes use the same shape with different settings.</p>
+
+  <div class="flow-diagram">
+    <div class="flow-stage-title">Build time: create objects once</div>
+    <div class="flow-row">
+      <div class="flow-box flow-source">
+        <div class="flow-box-title">source</div>
+        <div class="flow-box-desc"><code>CUSTOMER_PROFILE_SOURCE</code><br>Knows request shape and response parser.</div>
+      </div>
+      <div class="flow-arrow">+</div>
+      <div class="flow-box flow-client">
+        <div class="flow-box-title">client</div>
+        <div class="flow-box-desc"><code>AsyncClient</code><br>Has <code>customer_profile_url</code>. No token lives here.</div>
+      </div>
+      <div class="flow-arrow">+</div>
+      <div class="flow-box flow-identity">
+        <div class="flow-box-title">identity</div>
+        <div class="flow-box-desc"><code>OAuthIdentity</code><br>Has customer profile user/pass and its own cached token.</div>
+      </div>
+    </div>
+
+    <div class="flow-node-wrap">
+      <div class="flow-arrow">↓ captured by <code>make_fetch_node(source, client, identity)</code></div>
+      <div class="flow-box flow-node">
+        <div class="flow-box-title">customer_profile node</div>
+        <div class="flow-box-desc">An async function stored in LangGraph. It remembers those three object references every time it runs.</div>
+      </div>
+    </div>
+
+    <div class="flow-stage-title">Run time: one graph invocation uses the captured objects</div>
+    <div class="flow-runtime">
+      <div class="flow-box flow-state">
+        <div class="flow-box-title">GraphState</div>
+        <div class="flow-box-desc"><code>fs_req_id</code> enters the node.</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box flow-source">
+        <div class="flow-box-title">source</div>
+        <div class="flow-box-desc">Builds <code>RequestSpec</code>, then parses <code>Response</code>.</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box flow-identity">
+        <div class="flow-box-title">identity</div>
+        <div class="flow-box-desc">Returns token for customer profile user/pass.</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box flow-client">
+        <div class="flow-box-title">client</div>
+        <div class="flow-box-desc">Sends HTTP request with bearer token.</div>
+      </div>
+    </div>
+
+    <div class="flow-arrow" style="margin:0.75rem 0 0.45rem">↓ response parsed and returned as state update</div>
+    <div class="flow-box flow-state">
+      <div class="flow-box-title">{"customer_profile": CustomerProfileResult(...)}</div>
+      <div class="flow-box-desc">LangGraph merges this one field into <code>GraphState</code>. Other source nodes follow the same diagram with their own client, identity, user/pass, and token.</div>
+    </div>
+
+    <div class="flow-note">
+      <strong>Key ownership rule:</strong> the API client owns connection details; the identity owns credentials and token cache. Sharing the token-server <code>oauth_client</code> only shares a connection pool to the token endpoint, not the bearer tokens.
+    </div>
+  </div>
+
+  <div class="cn-repeat">
+    <strong>Programmer takeaway.</strong> A fetch node is an async function that remembers three object references. The source decides what to request and how to parse it. The API client decides where the HTTP request goes. The identity decides which user/pass token is attached. To understand any other source, follow those same three references.
+  </div>
+
+
+</div><!-- /tab-http -->
+
+<script>
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'graph') drawArrows();
+}
+
+// Draw SVG arrows for the graph tab
+function drawArrows() {
+  const svg = document.getElementById('arrows');
+  const wrapper = document.getElementById('graph-canvas-wrapper');
+  if (!svg || !wrapper) return;
+
+  const wRect = wrapper.getBoundingClientRect();
+
+  function center(id) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return {
+      x: r.left - wRect.left + r.width / 2,
+      y: r.top  - wRect.top  + r.height / 2,
+      top:    r.top  - wRect.top,
+      bottom: r.bottom - wRect.top,
+      left:   r.left - wRect.left,
+      right:  r.right - wRect.left,
+    };
+  }
+
+  svg.setAttribute('width', wrapper.offsetWidth);
+  svg.setAttribute('height', wrapper.offsetHeight);
+  svg.innerHTML = '';
+
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  defs.innerHTML = `
+    <marker id="arr-blue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="rgba(59,130,246,0.7)"/>
+    </marker>
+    <marker id="arr-indigo" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="rgba(99,102,241,0.7)"/>
+    </marker>
+    <marker id="arr-muted" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="rgba(100,116,139,0.7)"/>
+    </marker>
+  `;
+  svg.appendChild(defs);
+
+  const start = center('n-start');
+  const sources = ['n-cp','n-ins','n-opt','n-mc'].map(center);
+  const synth = center('n-synth');
+  const end = center('n-end');
+
+  function line(x1, y1, x2, y2, color, marker) {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    path.setAttribute('x1', x1); path.setAttribute('y1', y1);
+    path.setAttribute('x2', x2); path.setAttribute('y2', y2);
+    path.setAttribute('stroke', color);
+    path.setAttribute('stroke-width', '1.5');
+    path.setAttribute('stroke-dasharray', '4 3');
+    path.setAttribute('marker-end', `url(#${marker})`);
+    svg.appendChild(path);
+  }
+
+  if (start && sources[0]) {
+    sources.forEach(s => {
+      if (s) line(start.x, start.bottom, s.x, s.top - 4, 'rgba(59,130,246,0.5)', 'arr-blue');
+    });
+  }
+
+  if (synth) {
+    sources.forEach(s => {
+      if (s) line(s.x, s.bottom, synth.x, synth.top - 4, 'rgba(99,102,241,0.5)', 'arr-indigo');
+    });
+  }
+
+  if (synth && end) {
+    line(synth.x, synth.bottom, end.x, end.top - 4, 'rgba(100,116,139,0.5)', 'arr-muted');
+  }
+}
+
+// Draw on load and resize
+window.addEventListener('load', () => { setTimeout(drawArrows, 100); });
+window.addEventListener('resize', drawArrows);
+</script>
+
+</body>
+</html>
