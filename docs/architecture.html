@@ -661,6 +661,13 @@
     font-size: 1.1rem;
   }
 
+  .flow-arrow-label {
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.85rem;
+    text-align: center;
+  }
+
   .flow-node-wrap {
     margin: 1rem 0;
     display: grid;
@@ -698,6 +705,10 @@
     .flow-arrow {
       transform: rotate(90deg);
       min-height: 24px;
+    }
+
+    .flow-arrow-label {
+      transform: none;
     }
   }
 </style>
@@ -925,7 +936,10 @@
     </div>
 
     <div class="flow-node-wrap">
-      <div class="flow-arrow">↓ captured by <code>make_fetch_node(source, client, identity)</code></div>
+      <div class="flow-arrow flow-arrow-label">
+        <span>↓ captured by</span>
+        <code>make_fetch_node(source, client, identity)</code>
+      </div>
       <div class="flow-box flow-node">
         <div class="flow-box-title">customer_profile node</div>
         <div class="flow-box-desc">An async function stored in LangGraph. It remembers those three object references every time it runs.</div>
