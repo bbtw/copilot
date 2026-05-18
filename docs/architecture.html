@@ -920,8 +920,8 @@
     <div class="flow-stage-title">Build time: create objects once</div>
     <div class="flow-row">
       <div class="flow-box flow-source">
-        <div class="flow-box-title">source</div>
-        <div class="flow-box-desc"><code>CUSTOMER_PROFILE_SOURCE</code><br>Knows request shape and response parser.</div>
+        <div class="flow-box-title">source module</div>
+        <div class="flow-box-desc"><code>customer_profile.build_request</code> and <code>customer_profile.parse_response</code> — two module-level functions that know the request shape and response parser.</div>
       </div>
       <div class="flow-arrow">+</div>
       <div class="flow-box flow-client">
@@ -938,11 +938,11 @@
     <div class="flow-node-wrap">
       <div class="flow-arrow flow-arrow-label">
         <span>↓ captured by</span>
-        <code>make_fetch_node(source, client, identity)</code>
+        <code>make_fetch_node("customer_profile", build_request, parse_response, client, identity)</code>
       </div>
       <div class="flow-box flow-node">
         <div class="flow-box-title">customer_profile node</div>
-        <div class="flow-box-desc">An async function stored in LangGraph. It remembers those three object references every time it runs.</div>
+        <div class="flow-box-desc">An async function stored in LangGraph. It closes over <code>build_request</code>, <code>parse_response</code>, <code>client</code>, and <code>identity</code> — using them every time it runs.</div>
       </div>
     </div>
 
@@ -954,8 +954,8 @@
       </div>
       <div class="flow-arrow">→</div>
       <div class="flow-box flow-source">
-        <div class="flow-box-title">source</div>
-        <div class="flow-box-desc">Builds <code>RequestSpec</code>, then parses <code>Response</code>.</div>
+        <div class="flow-box-title">build_request / parse_response</div>
+        <div class="flow-box-desc">Builds <code>RequestSpec</code> from state, then parses the <code>Response</code> into a result model.</div>
       </div>
       <div class="flow-arrow">→</div>
       <div class="flow-box flow-identity">
@@ -981,7 +981,7 @@
   </div>
 
   <div class="cn-repeat">
-    <strong>Programmer takeaway.</strong> A fetch node is an async function that remembers three object references. The source decides what to request and how to parse it. The API client decides where the HTTP request goes. The identity decides which user/pass token is attached. To understand any other source, follow those same three references.
+    <strong>Programmer takeaway.</strong> A fetch node is an async function that closes over four things: <code>build_request</code> (what to ask for), <code>parse_response</code> (how to read the answer), <code>client</code> (where the request goes), and <code>identity</code> (which token to attach). To understand any other source node, find those four values in <code>build_graph</code>.
   </div>
 
 

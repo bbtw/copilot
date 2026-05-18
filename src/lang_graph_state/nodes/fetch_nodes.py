@@ -5,20 +5,22 @@ import httpx
 
 from lang_graph_state.errors import SourceFetchError
 from lang_graph_state.oauth_identity import OAuthIdentity
-from lang_graph_state.request_spec import SourceDefinition
+from lang_graph_state.request_spec import RequestSpec, RequestState
 from lang_graph_state.state import GraphState
 
 Node = Callable[[GraphState], Awaitable[dict]]
 
 
 def make_fetch_node(
-    source: SourceDefinition,
+    name: str,
+    build_request: Callable[[RequestState], RequestSpec],
+    parse_response: Callable[[httpx.Response], object],
     client: httpx.AsyncClient,
     identity: OAuthIdentity,
 ) -> Node:
     async def node(state: GraphState) -> dict:
         try:
-            spec = source.build_request(state)
+            spec = build_request(state)
             token = await identity.get_token()
             headers = dict(spec.headers or {})
             headers["Authorization"] = f"Bearer {token}"
@@ -31,9 +33,9 @@ def make_fetch_node(
                 headers=headers,
             )
             response.raise_for_status()
-            parsed = source.parse_response(response)
-            return {source.name: parsed}
+            parsed = parse_response(response)
+            return {name: parsed}
         except Exception as e:
-            raise SourceFetchError(source.name, e) from e
+            raise SourceFetchError(name, e) from e
 
     return node
