@@ -32,8 +32,7 @@ Built with the same pattern as a fetch node: two pure callables —
 `build_synthesis_request(state) -> RequestSpec` and
 `parse_synthesis_response(response) -> SynthesisOutput` — are injected into
 `make_synthesis_node`, which handles the token, header injection, HTTP call,
-and error wrapping. There is no `SynthesisDefinition` bundle because there is
-only one synthesis node.
+and error wrapping.
 
 ### OAuthIdentity
 
@@ -61,10 +60,23 @@ Clients are constructed once at startup and reused across invocations.
 
 ### Node Factory
 
-A function that accepts a `Source Definition`, an HTTP client, and an `OAuthIdentity`,
-and returns an async LangGraph node function. A single factory plus one `Source
-Definition` per source replaces having four near-identical per-source factory
-functions. Enables isolated unit testing by accepting fakes at construction time.
+A function that accepts a source name, `build_request`, `parse_response`, an HTTP
+client, and an `OAuthIdentity`, and returns an async LangGraph node function. A
+single factory shared across all four sources replaces having four near-identical
+per-source factory functions. Enables isolated unit testing by accepting fakes at
+construction time.
+
+The two callables are **pure functions**:
+
+- `build_request(state: RequestState) -> RequestSpec` returns a transport-agnostic
+  value object (`method`, `path`, optional `json` / `params` / `headers`). It does
+  not see the bearer token; the factory injects `Authorization` and `fsreqid`
+  headers after the spec is built.
+- `parse_response(response) -> SourceModel` takes the raw `httpx.Response`
+  (not pre-parsed JSON), so a source can inspect status codes or headers when needed.
+
+Keeping both pure means each source's request shape and response parsing are
+testable without a network, an `OAuthIdentity`, or any factory plumbing.
 
 ### Graph State
 
@@ -84,28 +96,6 @@ import cycle back into the source modules.
 A Pydantic model representing the parsed, validated result of one static source's
 API response. Each static source has its own `SourceModel`. Parsing happens inside
 the fetch node — raw HTTP responses never appear in state.
-
-### Source Definition
-
-The bundle of facts that distinguish one Static Source from the others: its name,
-its `SourceModel`, how to build its request, and how to parse its response. Each
-Static Source has exactly one `Source Definition`, declared at design time. The
-`Node Factory` consumes a `Source Definition` to produce a fetch node, so all
-source-specific logic lives in one value per source rather than being scattered
-across separate factory functions.
-
-The two callables are **pure functions**:
-
-- `build_request(state: RequestState) -> RequestSpec` returns a transport-agnostic value
-  object (`method`, `path`, optional `json` / `params` / `headers`). It does
-  not see the bearer token; the factory injects `Authorization` and `fsreqid`
-  headers after the spec is built.
-- `parse_response(response) -> SourceModel` takes the raw `httpx.Response`
-  (not pre-parsed JSON), so a source can inspect status codes or headers when
-  it needs to.
-
-Keeping both pure means each source's request shape and response parsing are
-testable without a network, an OAuthIdentity, or any factory plumbing.
 
 ### Synthesis Output
 
