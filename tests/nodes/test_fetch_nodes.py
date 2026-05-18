@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from lang_graph_state.errors import SourceFetchError
 from lang_graph_state.nodes.fetch_nodes import make_fetch_node
-from lang_graph_state.request_spec import RequestSpec, SourceDefinition
+from lang_graph_state.request_spec import RequestSpec
 from lang_graph_state.state import GraphState
 
 
@@ -33,19 +33,6 @@ def _parse_response(response: httpx.Response) -> FakeResult:
     return FakeResult(value=response.json()["v"])
 
 
-def _make_source(
-    build_request=_build_request,
-    parse_response=_parse_response,
-    name: str = "test_source",
-) -> SourceDefinition:
-    return SourceDefinition(
-        name=name,
-        result_model=FakeResult,
-        build_request=build_request,
-        parse_response=parse_response,
-    )
-
-
 def _state() -> GraphState:
     return GraphState(fs_req_id="req-123")
 
@@ -59,7 +46,7 @@ async def test_fetch_node_happy_path_returns_parsed_under_source_name() -> None:
         return httpx.Response(200, json={"v": "hello"})
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://x")
-    node = make_fetch_node(_make_source(), client, FakeOAuthIdentity("tok-abc"))
+    node = make_fetch_node("test_source", _build_request, _parse_response, client, FakeOAuthIdentity("tok-abc"))
 
     result = await node(_state())
 
@@ -83,7 +70,7 @@ async def test_fetch_node_wraps_http_error_in_source_fetch_error() -> None:
         return httpx.Response(500, json={"error": "boom"})
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://x")
-    node = make_fetch_node(_make_source(name="customer_profile"), client, FakeOAuthIdentity())
+    node = make_fetch_node("customer_profile", _build_request, _parse_response, client, FakeOAuthIdentity())
 
     with pytest.raises(SourceFetchError) as exc:
         await node(_state())
@@ -103,11 +90,7 @@ async def test_fetch_node_wraps_parse_error_in_source_fetch_error() -> None:
         return FakeResult(value=response.json()["v"])  # KeyError
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://x")
-    node = make_fetch_node(
-        _make_source(parse_response=parse_response, name="insights"),
-        client,
-        FakeOAuthIdentity(),
-    )
+    node = make_fetch_node("insights", _build_request, parse_response, client, FakeOAuthIdentity())
 
     with pytest.raises(SourceFetchError) as exc:
         await node(_state())

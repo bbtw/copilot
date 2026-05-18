@@ -3,7 +3,7 @@ from __future__ import annotations
 import httpx
 from pydantic import BaseModel
 
-from lang_graph_state.request_spec import RequestSpec, RequestState, SourceDefinition
+from lang_graph_state.request_spec import RequestSpec, RequestState
 
 
 class OptimizerResult(BaseModel):
@@ -16,11 +16,3 @@ def build_request(state: RequestState) -> RequestSpec:
 
 def parse_response(response: httpx.Response) -> OptimizerResult:
     return OptimizerResult()
-
-
-definition = SourceDefinition(
-    name="optimizer",
-    result_model=OptimizerResult,
-    build_request=build_request,
-    parse_response=parse_response,
-)

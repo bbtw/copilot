@@ -11,7 +11,7 @@ from lang_graph_state.checkpointer import make_checkpointer
 from lang_graph_state.nodes.fetch_nodes import make_fetch_node
 from lang_graph_state.nodes.synthesis_node import make_synthesis_node
 from lang_graph_state.settings import Settings
-from lang_graph_state.sources import ALL_SOURCES
+from lang_graph_state.sources import customer_profile, insights, monte_carlo, optimizer
 from lang_graph_state.state import GraphState
 from lang_graph_state.synthesis.parsing import parse_synthesis_response
 from lang_graph_state.synthesis.prompt import build_synthesis_request
@@ -46,10 +46,16 @@ async def build_graph(
         await asyncio.gather(*(i.initialize() for i in identities.values()))
 
         builder = StateGraph(GraphState)
-        for source in ALL_SOURCES:
+        fetch_sources = [
+            ("customer_profile", customer_profile),
+            ("insights", insights),
+            ("optimizer", optimizer),
+            ("monte_carlo", monte_carlo),
+        ]
+        for name, mod in fetch_sources:
             builder.add_node(
-                source.name,
-                make_fetch_node(source, source_clients[source.name], identities[source.name]),
+                name,
+                make_fetch_node(name, mod.build_request, mod.parse_response, source_clients[name], identities[name]),
             )
         builder.add_node(
             "synthesis",
@@ -63,9 +69,9 @@ async def build_graph(
             ),
         )
 
-        for source in ALL_SOURCES:
-            builder.add_edge(START, source.name)
-            builder.add_edge(source.name, "synthesis")
+        for name, _ in fetch_sources:
+            builder.add_edge(START, name)
+            builder.add_edge(name, "synthesis")
         builder.add_edge("synthesis", END)
 
         checkpointer = make_checkpointer(s)
