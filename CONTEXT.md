@@ -1,76 +1,110 @@
-# Financial Planning Co-Pilot
+# Retirement Planning Optimizer
 
-A LangGraph-based agent that assists licensed US financial advisors by synthesizing **Decision-Support Briefs** from a **Client Profile**. Internal-facing only at v1: outputs are consumed by the advisor, not delivered to the client.
+A chat-driven retirement planning optimizer for consumers. The person whose retirement it is talks to the system in natural language; a Gurobi optimization model produces the plan.
 
 ## Language
 
-**Advisor**:
-The licensed US financial advisor who operates the agent and is the regulated entity-of-record for any downstream client communication.
-_Avoid_: Planner, user, broker (these have specific industry meanings that don't fit here)
+**User**:
+The financial unit whose retirement is being optimized and who operates the chat — one individual or one married couple pooled into a single profile. "Married" surfaces in exactly one place: filing status (MFJ brackets and standard deduction). One set of Accounts, one retirement age, one Savings Capacity, one Spending Need; a spouse's Social Security is just a second Guaranteed Income entry. Consumer-facing — there is no advisor in the loop.
+_Avoid_: Client, customer, advisor (imply a professional intermediary); household (implies the members are modeled separately — they aren't)
 
-**Client**:
-The household being analyzed. Always the subject of a brief, never an operator of the system.
-_Avoid_: Customer, user, account holder
+**Account**:
+One of exactly three tax-treatment buckets holding the User's assets: Traditional (pre-tax), Roth, or Taxable brokerage. Real-world account types (401(k), IRA) are collapsed into their bucket — the system never distinguishes them. A single combined annual contribution limit (User-overridable) applies to Traditional + Roth; Taxable is unlimited. Employer match is extra Traditional inflow outside Savings Capacity — an input, never a decision.
+_Avoid_: Portfolio, fund (imply asset selection, out of scope); 401(k), IRA (real account types the model deliberately doesn't know about)
 
-**Client Profile**:
-The structured Pydantic-typed input describing the **Client**'s financial situation. The single input boundary at v1 — no documents, no aggregator feeds, no CRM read-through.
-_Avoid_: Intake, household data, financial picture
+**Savings Capacity**:
+The fixed annual amount the User can save during the Accumulation Phase. An input, not a decision variable.
+_Avoid_: Savings rate, contribution (the latter names where money goes, not how much is available)
 
-**Decision-Support Brief** (or **Brief**):
-The v1 output artifact. Surfaces 2–3 strategic options for the **Advisor** to evaluate, plus situation triage and flagged issues. Internal work product — never a client deliverable.
-_Avoid_: Plan, report, recommendation memo (these imply client-facing or directive output)
+**Spending Need**:
+The fixed annual amount the User must withdraw during the Decumulation Phase. An input, not a decision variable.
+_Avoid_: Budget, expenses, income need
 
-**Plan Synthesis**:
-The act of producing a **Brief** from a **Client Profile**. The v1 task scope. Distinct from **Plan Generation** (full client-facing plan, deferred to later versions).
-_Avoid_: Plan creation, planning, advice generation
+**Contribution Split**:
+The optimizer's per-year decision of how Savings Capacity is divided across Accounts, subject to IRS contribution limits.
+_Avoid_: Allocation (overloaded with asset allocation, which is a User input)
 
-**Co-Pilot**:
-The agent's positioning — the **Advisor** retains decision authority and liability. The agent surfaces options; it does not recommend.
-_Avoid_: Autonomous agent, robo-advisor, assistant
+**Withdrawal Schedule**:
+The optimizer's per-year decision of how much to withdraw from each Account to meet Spending Need. Traditional and Roth withdrawals are forbidden before age 59½ (no penalty modeling — if Taxable can't bridge the gap, the plan is infeasible and the chat explains why).
+_Avoid_: Drawdown plan, distribution strategy
 
-**Wellness Model**:
-The firm's pre-existing weighted multi-domain financial wellness scoring system. Produces per-domain **Wellness Scores** for a **Client Profile**. The agent consumes its output; it does not compute scores or override its rankings.
-_Avoid_: Scoring engine, financial health model, planning model
+**Roth Conversion**:
+The optimizer's per-year decision to move money Traditional → Roth, taxed as ordinary income in the conversion year. Allowed in any year; valuable in low-bracket years. Does not count toward RMD satisfaction.
+_Avoid_: Backdoor Roth (a contribution technique, not this)
 
-**Wellness Score**:
-A per-domain numeric output of the **Wellness Model** for a given **Client Profile**. Drives deterministic ranking in the **Brief**.
-_Avoid_: Health score, planning score, rating
+**RMD**:
+The IRS-required minimum Traditional withdrawal from age 73, proportional to balance per the Uniform Lifetime Table. A hard constraint — it is why unconverted Traditional balances eventually get force-taxed.
+_Avoid_: Mandatory distribution, forced withdrawal
 
-**Wellness Domain**:
-One of the firm-defined areas covered by the **Wellness Model** (e.g., retirement, tax, insurance, estate, cash flow). The exact list is owned by the firm, not the agent.
-_Avoid_: Category, area, pillar (these are used inconsistently across the industry)
+**Guaranteed Income**:
+Optional User-provided income streams the optimizer doesn't control: Social Security (annual benefit + start age, 85% counted as taxable ordinary income — the convex-safe asymptote of the real phase-in) and pension (100% taxable). Reduces the withdrawals needed for Spending Need and occupies bracket space. Benefit amounts are inputs; the system never estimates them, and claiming age is not a decision variable.
+_Avoid_: Fixed income (means bonds), entitlements
 
-**Calculator**:
-A pre-existing deterministic computation owned by the firm (e.g., retirement Monte Carlo, tax projection). Produces structured outputs that the agent reads but does not modify.
-_Avoid_: Engine, model (overloaded), tool (overloaded with LangChain tool-calling)
+**Accumulation Phase**:
+The years from today until retirement, during which the Contribution Split is decided.
+
+**Decumulation Phase**:
+The years from retirement until the Plan Horizon, during which the Withdrawal Schedule is decided.
+_Avoid_: Retirement phase, distribution phase
+
+**Plan Horizon**:
+The final year of the plan — the end of the Decumulation Phase.
+_Avoid_: End of life, life expectancy (the horizon is a planning input, not a mortality prediction)
+
+**Objective**:
+The User's per-run choice of what to maximize: **Wealth at Retirement** (assets at the start of the Decumulation Phase) or **Terminal Wealth** (assets at the Plan Horizon). One lifetime model, two selectable objective functions — never blended or stacked.
+_Avoid_: Goal, target (those suggest a threshold to hit, not a quantity to maximize)
+
+**After-Tax Value**:
+The measurement unit for both Objectives: Roth at face, Taxable at face (its growth is already taxed via annual tax drag), Traditional at face minus bracket-taxed liquidation. Raw balances are never compared across Accounts.
+_Avoid_: Net worth, balance (raw balances overstate Traditional dollars and would let the solver game the objective)
+
+**Tax Drag**:
+The Taxable Account's growth is taxed annually at the flat capital-gains rate — it grows at the after-tax return, its withdrawals are tax-free, and no cost basis is tracked. A deliberate convex simplification that slightly over-favors tax-advantaged Accounts.
+_Avoid_: Basis tracking, realized gains (concepts the model deliberately doesn't have)
+
+**Expected Return**:
+A single real (after-inflation) rate of return, User input with a sensible default, applied identically to all three Accounts (Taxable net of Tax Drag). Per-Account returns are deliberately impossible — they would smuggle asset-location advice out of a model that doesn't understand assets.
+_Avoid_: Per-account returns, growth rate assumptions (plural)
+
+**Profile**:
+The typed, structured object holding everything the solver needs about the User — ages, balances per Account, gross annual income (needed to price the Traditional deduction against the brackets), Savings Capacity, Spending Need, filing status, Guaranteed Income, optional employer match, Expected Return. Filled conversationally by the LLM, validated in code.
+_Avoid_: Intake, form, client profile
+
+**Plan**:
+The solver's output for one Profile + one Objective: the year-by-year Contribution Split, Withdrawal Schedule, Roth Conversions, resulting balances, and objective value. The only source of financial numbers in the conversation.
+_Avoid_: Recommendation, advice (the system shows an optimal schedule under stated assumptions; it does not advise)
+
+**What-If**:
+A follow-up question answered by mutating the Profile and re-solving — never by the LLM extrapolating from a previous Plan. First-class in the chat; it is why chat beats a form.
+_Avoid_: Scenario analysis, sensitivity (heavier machinery than a re-solve)
+
+**Real Dollars**:
+The model's single unit: today's purchasing power. Bracket thresholds, contribution limits, Savings Capacity, and Spending Need stay constant across years; returns are real (after-inflation). No inflation input exists.
+_Avoid_: Nominal dollars, future dollars (never appear anywhere in the system — inputs, model, or chat output)
+
+**Tax Model**:
+Progressive federal ordinary-income brackets (with filing status and standard deduction as User inputs), plus a flat capital-gains rate on the Taxable Account. No state tax at v1. Kept convex so the optimization stays a pure LP — tax features that break convexity (e.g., Social Security benefit taxation phase-in) are out of scope until that constraint is consciously dropped.
+_Avoid_: Effective rate, flat rate (a flat ordinary-income rate collapses the optimization to a corner solution)
 
 ## Relationships
 
-- An **Advisor** runs **Plan Synthesis** on one **Client Profile** at a time
-- **Plan Synthesis** produces exactly one **Decision-Support Brief** per run
-- A **Decision-Support Brief** belongs to one **Client** and is reviewed by one **Advisor**
-- A **Client Profile** describes one **Client** (single household; joint clients modeled as one profile)
-- The **Wellness Model** reads a **Client Profile** and emits one **Wellness Score** per **Wellness Domain**
-- Each **Calculator** reads (parts of) a **Client Profile** and emits structured numerical output
-- **Plan Synthesis** consumes: a **Client Profile**, a set of **Wellness Scores**, and a set of **Calculator** outputs
+- A **User** operates the chat about their own retirement (no third-party profiles)
+- The optimizer decides money movements only: the **Contribution Split** (Accumulation Phase) and the **Withdrawal Schedule** (Decumulation Phase)
+- **Savings Capacity**, **Spending Need**, and the single **Expected Return** are User inputs — never decision variables
+- Taxes are the friction that makes the optimization non-trivial; without them the problem is degenerate
+- A run maximizes exactly one **Objective** over one shared lifetime model (Accumulation + Decumulation); under **Wealth at Retirement**, decumulation years must still be feasible (Spending Need met) but don't affect the objective
+- A run consumes one **Profile** + one **Objective** and produces one **Plan**; a **What-If** is just another run
+- If a Profile is infeasible (e.g. Spending Need can't be met, or Taxable can't bridge to age 59½), there is no Plan — the chat explains the infeasibility instead
 
 ## Example dialogue
 
-> **Dev:** "When the **Advisor** triggers **Plan Synthesis**, can the **Brief** include a specific Roth conversion amount?"
-> **Domain expert:** "It can model the tradeoff and show 2–3 conversion sizes as options, but it doesn't pick one — that's the **Advisor**'s call. If it picks, we're no longer a **Co-Pilot**, we're a robo-advisor and the regulatory profile changes."
+> **Dev:** "The User asked 'should I be doing Roth conversions?' — can the chat just say yes?"
+> **Domain expert:** "The LLM never answers a money question from its own head. It runs a solve. If the optimal Plan shows Roth Conversions of $40k/year from 62 to 69, the chat says that, citing the Plan's numbers. If the Plan shows zero conversions, the honest answer is 'not under your assumptions.'"
+>
+> **Dev:** "The User has $1M in Traditional and $880k would-be in Roth — which Plan wins Wealth at Retirement?"
+> **Domain expert:** "Neither number as stated — the Objective is measured in After-Tax Value. The Traditional million is worth face minus bracket-taxed liquidation; the Roth is face. Raw balances are never compared."
 
 ## Flagged ambiguities
 
-- "Plan" was used to refer to both the v1 output and a future client-facing artifact — resolved: v1 output is a **Decision-Support Brief**, the term "Plan" is reserved for the client-facing artifact built in later versions.
-- "User" was ambiguous between **Advisor** and **Client** — resolved: only the **Advisor** uses the system; the **Client** is a subject, not a user.
-
-## Open questions (next session pickup)
-
-These shape what the **Wellness Model** emits and therefore what the agent has to work with. They should be the first items resolved when work resumes:
-
-- **Wellness Domains** — what is the firm's actual taxonomy? (Retirement, tax, insurance, estate, cash flow are the working straw man.)
-- **Wellness Score scale and semantics** — what range, and what does "good" vs "concerning" mean numerically?
-- **Ranking output** — does the **Wellness Model** emit a pre-ranked list, or only per-domain scores (leaving ranking as a thin deterministic node downstream)?
-- **Wellness Score drivers** — does each score come with structured "why this score" data (e.g., "retirement = 6/10 because savings rate is 8% vs target 15%"), or only the bare number? Load-bearing for the agent's narrative grounding (decision-spectrum row #5).
-
-Live status of these is mirrored in `docs/agent-decision-spectrum.html`.
+- This repo previously held an advisor-facing "Financial Planning Co-Pilot" with its own glossary — that domain is dead; none of its terms (Advisor, Client, Brief, Wellness Model) carry over.
