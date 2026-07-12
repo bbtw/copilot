@@ -567,8 +567,8 @@
             <div class="code-block">
               <button class="copy-btn" type="button">Copy</button>
               <pre><code># paste as-is into a gitignored .env, or run each line in your shell
-export LLM_GATEWAY_BASE_URL=...   # company OpenAI-compatible gateway
-export LLM_GATEWAY_API_KEY=...
+export LLM_BASE_URL=...   # company gateway, or a local Ollama OpenAI-compatible endpoint
+export LLM_API_KEY=...
 export LLM_MODEL=...              # model name your gateway routes
 export LANGSMITH_TRACING=true     # optional: full tracing
 export LANGSMITH_API_KEY=...
@@ -593,8 +593,8 @@ uv run copilot</code></pre>
             <div class="code-block">
               <button class="copy-btn" type="button">Copy</button>
               <pre><code># paste as-is into a gitignored .env, or run each line in your shell
-export LLM_GATEWAY_BASE_URL=...   # company OpenAI-compatible gateway
-export LLM_GATEWAY_API_KEY=...
+export LLM_BASE_URL=...   # company gateway, or a local Ollama OpenAI-compatible endpoint
+export LLM_API_KEY=...
 export LLM_MODEL=...              # model name your gateway routes
 export LANGSMITH_API_KEY=...
 export EVAL_SIM_MODEL=...   # optional: simulated-user model, defaults to LLM_MODEL

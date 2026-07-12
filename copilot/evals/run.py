@@ -16,7 +16,8 @@ from langsmith.evaluation import evaluate
 from langsmith.schemas import Example, Run
 from pydantic import ValidationError
 
-from ..chat import SYSTEM_PROMPT, gateway_client
+from ..chat import SYSTEM_PROMPT
+from ..llm import llm_client
 from ..settings import Settings, sync_langsmith_env
 from .cards import FactCard, load_cards
 from .scenario import TURN_CAP, run_scenario
@@ -95,7 +96,7 @@ def main() -> None:
         settings = Settings()
     except ValidationError:
         sys.exit(
-            "Set LLM_GATEWAY_BASE_URL, LLM_GATEWAY_API_KEY, and LLM_MODEL "
+            "Set LLM_BASE_URL, LLM_API_KEY, and LLM_MODEL "
             "(plus LANGSMITH_API_KEY; EVAL_SIM_MODEL optionally overrides the sim model), "
             "in your shell or a .env file."
         )
@@ -104,8 +105,8 @@ def main() -> None:
     sync_langsmith_env(settings)
     agent_model = settings.llm_model
     sim_model = settings.eval_sim_model or agent_model
-    agent_client = gateway_client(settings)
-    sim_client = gateway_client(settings)
+    agent_client = llm_client(settings)
+    sim_client = llm_client(settings)
 
     cards = load_cards()
     ls_client = Client()

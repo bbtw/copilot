@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from openai import OpenAI
 
 from ..chat import SYSTEM_PROMPT, run_turn
+from ..llm import complete
 from .cards import FactCard
 
 TURN_CAP = 12
@@ -43,11 +44,6 @@ class ScenarioRun:
     solve_result: dict | None
     agent_texts: tuple[str, ...]
     sim_texts: tuple[str, ...]
-
-
-def _completion_text(client: OpenAI, model: str, messages: list[dict]) -> str:
-    response = client.chat.completions.create(model=model, messages=messages)
-    return response.choices[0].message.content or ""
 
 
 def _tool_result(messages: list[dict], start: int, tool_call_id: str) -> dict | None:
@@ -102,7 +98,7 @@ def run_scenario(
         {"role": "user", "content": _KICKOFF},
     ]
     for _ in range(turn_cap):
-        sim_text = _completion_text(sim_client, sim_model, sim_messages)
+        sim_text = complete(sim_client, sim_model, sim_messages)
         sim_messages.append({"role": "assistant", "content": sim_text})
         messages.append({"role": "user", "content": sim_text})
         before = len(messages)

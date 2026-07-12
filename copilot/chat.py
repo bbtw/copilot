@@ -1,16 +1,17 @@
 """Terminal chat REPL: the LLM translates, the solver decides (ADR-0002).
 
-LLM calls go through the company's OpenAI-compatible gateway (ADR-0003) and are
-traced in LangSmith via wrap_openai; solver runs are traced via @traceable.
+LLM interaction mechanics live in `.llm`; this module holds the prompt, the
+solve_plan tool schema, and the glue from tool-call arguments to a solve.
+Solver runs are traced via @traceable.
 """
 
 import json
 import sys
 
-from langsmith.wrappers import wrap_openai
 from openai import OpenAI
 from pydantic import ValidationError
 
+from .llm import llm_client, run_tool_loop
 from .model import ModelTooLargeError, solve
 from .plan import Infeasible, Objective, render_table, to_summary
 from .profile import IncomeKind, IncomeStream, Profile
@@ -150,44 +151,10 @@ def _run_tool_call(arguments: str) -> str:
     return json.dumps(to_summary(result))
 
 
-def gateway_client(settings: Settings) -> OpenAI:
-    """OpenAI client for the company gateway (ADR-0003), traced via wrap_openai."""
-    return wrap_openai(
-        OpenAI(base_url=settings.llm_gateway_base_url, api_key=settings.llm_gateway_api_key)
-    )
-
-
 def run_turn(client: OpenAI, model: str, messages: list[dict]) -> str:
-    """Advance the conversation by one user turn: call the model, execute any
-    solve_plan calls, and repeat until the assistant replies in text. Appends
-    every message to `messages` in place and returns the reply. Both the REPL
-    and the eval harness (ADR-0004) drive this same loop."""
-    while True:
-        response = client.chat.completions.create(
-            model=model, messages=messages, tools=[SOLVE_TOOL]
-        )
-        msg = response.choices[0].message
-        entry: dict = {"role": "assistant", "content": msg.content or ""}
-        if msg.tool_calls:
-            entry["tool_calls"] = [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-                }
-                for tc in msg.tool_calls
-            ]
-        messages.append(entry)
-        if not msg.tool_calls:
-            return msg.content or ""
-        for tc in msg.tool_calls:
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": _run_tool_call(tc.function.arguments),
-                }
-            )
+    """Advance the conversation by one user turn via solve_plan tool calls.
+    Both the REPL and the eval harness (ADR-0004) drive this same loop."""
+    return run_tool_loop(client, model, messages, tools=[SOLVE_TOOL], execute_tool=_run_tool_call)
 
 
 def main() -> None:
@@ -195,12 +162,12 @@ def main() -> None:
         settings = Settings()
     except ValidationError:
         sys.exit(
-            "Set LLM_GATEWAY_BASE_URL, LLM_GATEWAY_API_KEY, and LLM_MODEL "
+            "Set LLM_BASE_URL, LLM_API_KEY, and LLM_MODEL "
             "(and optionally LANGSMITH_TRACING/LANGSMITH_API_KEY for tracing), "
             "in your shell or a .env file."
         )
     sync_langsmith_env(settings)
-    client = gateway_client(settings)
+    client = llm_client(settings)
     messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
     print("Retirement planning optimizer — describe your situation ('quit' to exit).")
     while True:
