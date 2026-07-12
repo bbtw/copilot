@@ -1,0 +1,18 @@
+{
+  "name": "retired-overspender",
+  "family": "infeasible_profile",
+  "facts": "Goal: maximize wealth at the end of the plan (terminal wealth), planning to age 90.\n- Age 60, single filer, retired this year at 60.\n- No more income from work and nothing more to save: gross income $0, savings $0.\n- Wants to spend $200,000 a year in retirement.\n- Balances: $100,000 traditional (pre-tax), $50,000 Roth, $50,000 taxable brokerage.\n- Leave Social Security and pensions out of the plan. No employer match.\n- Happy with the assistant's default assumptions for everything else.",
+  "expected_args": {
+    "current_age": 60,
+    "retirement_age": 60,
+    "horizon_age": 90,
+    "filing_status": "single",
+    "gross_income": 0,
+    "savings_capacity": 0,
+    "spending_need": 200000,
+    "balance_traditional": 100000,
+    "balance_roth": 50000,
+    "balance_taxable": 50000,
+    "objective": "terminal_wealth"
+  }
+}

@@ -1,6 +1,8 @@
 # LLM translates, solver decides
 
-The chat interface is an LLM; the retirement math is a fixed, hand-written Gurobi LP formulation. The LLM's job is translation in both directions — natural language → typed Profile on the way in, solver output → narrative on the way out — connected by tool use. Every financial number the User sees originates in solver output: the LLM never computes, estimates, or rounds a figure itself, and it never writes or modifies optimization code per conversation.
+The chat interface is an LLM; the retirement math is a fixed, hand-written Gurobi LP formulation. The LLM's job is translation in both directions — natural language → typed Profile on the way in, solver output → narrative on the way out — connected by tool use. Every financial number the User sees originates in solver output: the LLM never computes, estimates, or extrapolates a figure itself, and it never writes or modifies optimization code per conversation.
+
+> **Amended 2026-07-09**: originally this rule also forbade rounding. When the eval suite pinned Number Faithfulness to a deterministic check, we allowed rounding a solver figure to displayed significant digits ("$1.2M" for 1,203,456) so narration can sound human — computing, estimating, and extrapolating remain forbidden.
 
 ## Considered Options
 

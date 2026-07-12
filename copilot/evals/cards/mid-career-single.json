@@ -1,0 +1,21 @@
+{
+  "name": "mid-career-single",
+  "family": "happy_path",
+  "facts": "Goal: maximize wealth at the end of the plan (terminal wealth), planning to age 90.\n- Age 40, single filer, retiring at 65.\n- Gross income $150,000 a year; can save $30,000 a year.\n- Will spend $80,000 a year in retirement.\n- Balances: $200,000 traditional (pre-tax), $50,000 Roth, $100,000 taxable brokerage.\n- Social Security: $30,000 a year starting at age 67. No pension.\n- No employer match; happy with the assistant's default assumptions for everything else.",
+  "expected_args": {
+    "current_age": 40,
+    "retirement_age": 65,
+    "horizon_age": 90,
+    "filing_status": "single",
+    "gross_income": 150000,
+    "savings_capacity": 30000,
+    "spending_need": 80000,
+    "balance_traditional": 200000,
+    "balance_roth": 50000,
+    "balance_taxable": 100000,
+    "income_streams": [
+      {"kind": "social_security", "annual_amount": 30000, "start_age": 67}
+    ],
+    "objective": "terminal_wealth"
+  }
+}

@@ -87,6 +87,32 @@ _Avoid_: Nominal dollars, future dollars (never appear anywhere in the system �
 Progressive federal ordinary-income brackets (with filing status and standard deduction as User inputs), plus a flat capital-gains rate on the Taxable Account. No state tax at v1. Kept convex so the optimization stays a pure LP — tax features that break convexity (e.g., Social Security benefit taxation phase-in) are out of scope until that constraint is consciously dropped.
 _Avoid_: Effective rate, flat rate (a flat ordinary-income rate collapses the optimization to a corner solution)
 
+### Evaluation
+
+**Simulated User**:
+An LLM that plays the User in an eval conversation, permitted to state only what its Fact Card contains.
+_Avoid_: Mock user, synthetic user (suggest canned responses — the Simulated User improvises within its facts)
+
+**Fact Card**:
+A scenario's ground-truth User facts — the sole source the Simulated User speaks from, and the expected solve_plan arguments for scoring.
+_Avoid_: Fixture, test data (undersell that it is both script and answer key)
+
+**Profile Fidelity**:
+The eval dimension asking: do the raw solve_plan arguments match the Fact Card exactly — stated fields verbatim, unstated optional fields strictly absent (an explicitly-passed default is a failure, since it may be hardcoded from the prompt rather than sourced from taxdata).
+_Avoid_: Extraction accuracy (fidelity includes not inventing fields, not just extracting stated ones)
+
+**Number Faithfulness**:
+The eval dimension asking: does every number in the agent's prose match a source value — the solve_plan result (or, for an infeasible Profile, the solver's infeasibility reason), the Fact Card, an age within the plan, or a taxdata default — either exactly or rounded to the significant digits displayed ("$1.2M" matches 1,203,456; "$1.25M" does not; derived arithmetic such as "$40k/year" from a $320k total always fails).
+_Avoid_: Hallucination check (derived arithmetic from real figures also fails, not just invented numbers)
+
+**Scenario**:
+One eval unit: a Fact Card conversation driven to the first solve_plan call plus the agent's narration turn, under a hard turn cap — reaching the cap without a solve scores as failure ("no-solve"), not as an error.
+_Avoid_: Test case (a Scenario's transcript differs run to run; only the Fact Card is fixed)
+
+**Voided Run**:
+A Scenario run discarded because the Simulated User stated a number not on its Fact Card (audited with the same extractor as Number Faithfulness); voided runs are retried and reported separately, never counted as agent failures.
+_Avoid_: Flake (voids are attributed to the sim side by construction, not unexplained)
+
 ## Relationships
 
 - A **User** operates the chat about their own retirement (no third-party profiles)
@@ -96,6 +122,8 @@ _Avoid_: Effective rate, flat rate (a flat ordinary-income rate collapses the op
 - A run maximizes exactly one **Objective** over one shared lifetime model (Accumulation + Decumulation); under **Wealth at Retirement**, decumulation years must still be feasible (Spending Need met) but don't affect the objective
 - A run consumes one **Profile** + one **Objective** and produces one **Plan**; a **What-If** is just another run
 - If a Profile is infeasible (e.g. Spending Need can't be met, or Taxable can't bridge to age 59½), there is no Plan — the chat explains the infeasibility instead
+- A **Scenario** pairs one **Fact Card** with one **Simulated User**; repeated runs (three per suite invocation) yield two suite scores — the **Profile Fidelity** rate and the **Number Faithfulness** rate — never blended into one number
+- A **Voided Run** is charged to the Simulated User, never to the agent; a no-solve run is charged to the agent, never to the harness
 
 ## Example dialogue
 
@@ -104,6 +132,9 @@ _Avoid_: Effective rate, flat rate (a flat ordinary-income rate collapses the op
 >
 > **Dev:** "The User has $1M in Traditional and $880k would-be in Roth — which Plan wins Wealth at Retirement?"
 > **Domain expert:** "Neither number as stated — the Objective is measured in After-Tax Value. The Traditional million is worth face minus bracket-taxed liquidation; the Roth is face. Raw balances are never compared."
+>
+> **Dev:** "In an eval run the agent passed expected_return=0.05 explicitly, and 0.05 is the default — Profile Fidelity pass?"
+> **Domain expert:** "Fail. The Fact Card never stated a return, so the field must be absent. An agent that volunteers today's default has probably memorized it from the prompt — and today's default isn't tomorrow's."
 
 ## Flagged ambiguities
 

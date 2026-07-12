@@ -1,0 +1,18 @@
+{
+  "name": "married-early-planner",
+  "family": "happy_path",
+  "facts": "Goal: maximize wealth at retirement, planning to age 92.\n- Age 35, married filing jointly (finances pooled with spouse), retiring at 67.\n- Combined gross income $190,000 a year; can save $25,000 a year.\n- Will spend $90,000 a year in retirement.\n- Balances: $150,000 traditional (pre-tax), $40,000 Roth, $60,000 taxable brokerage.\n- Leave Social Security and pensions out of the plan entirely. No employer match.\n- Happy with the assistant's default assumptions for everything else.",
+  "expected_args": {
+    "current_age": 35,
+    "retirement_age": 67,
+    "horizon_age": 92,
+    "filing_status": "married_filing_jointly",
+    "gross_income": 190000,
+    "savings_capacity": 25000,
+    "spending_need": 90000,
+    "balance_traditional": 150000,
+    "balance_roth": 40000,
+    "balance_taxable": 60000,
+    "objective": "wealth_at_retirement"
+  }
+}

@@ -37,8 +37,9 @@ How a session works:
    compare the summaries.
 
 Hard rules:
-- Never compute, estimate, extrapolate, or round financial figures yourself.
-  Every number you state must come verbatim from a solve_plan result.
+- Never compute, estimate, or extrapolate financial figures yourself. Every
+  number you state must come from a solve_plan result; you may round it for
+  readability but never combine or derive figures.
 - All amounts are in today's dollars and the expected return is a real
   (after-inflation) return. Say so when collecting inputs.
 - Present results as "optimal under your stated assumptions" — never as
@@ -148,6 +149,49 @@ def _run_tool_call(arguments: str) -> str:
     return json.dumps(to_summary(result))
 
 
+def gateway_client() -> OpenAI:
+    """OpenAI client for the company gateway (ADR-0003), traced via wrap_openai."""
+    return wrap_openai(
+        OpenAI(
+            base_url=os.environ["LLM_GATEWAY_BASE_URL"],
+            api_key=os.environ["LLM_GATEWAY_API_KEY"],
+        )
+    )
+
+
+def run_turn(client: OpenAI, model: str, messages: list[dict]) -> str:
+    """Advance the conversation by one user turn: call the model, execute any
+    solve_plan calls, and repeat until the assistant replies in text. Appends
+    every message to `messages` in place and returns the reply. Both the REPL
+    and the eval harness (ADR-0004) drive this same loop."""
+    while True:
+        response = client.chat.completions.create(
+            model=model, messages=messages, tools=[SOLVE_TOOL]
+        )
+        msg = response.choices[0].message
+        entry: dict = {"role": "assistant", "content": msg.content or ""}
+        if msg.tool_calls:
+            entry["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                }
+                for tc in msg.tool_calls
+            ]
+        messages.append(entry)
+        if not msg.tool_calls:
+            return msg.content or ""
+        for tc in msg.tool_calls:
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": _run_tool_call(tc.function.arguments),
+                }
+            )
+
+
 def main() -> None:
     base_url = os.environ.get("LLM_GATEWAY_BASE_URL")
     api_key = os.environ.get("LLM_GATEWAY_API_KEY")
@@ -157,7 +201,7 @@ def main() -> None:
             "Set LLM_GATEWAY_BASE_URL, LLM_GATEWAY_API_KEY, and LLM_MODEL "
             "(and optionally LANGSMITH_TRACING/LANGSMITH_API_KEY for tracing)."
         )
-    client = wrap_openai(OpenAI(base_url=base_url, api_key=api_key))
+    client = gateway_client()
     messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
     print("Retirement planning optimizer — describe your situation ('quit' to exit).")
     while True:
@@ -170,34 +214,9 @@ def main() -> None:
         if user_input.lower() in {"quit", "exit"}:
             break
         messages.append({"role": "user", "content": user_input})
-        while True:
-            try:
-                response = client.chat.completions.create(
-                    model=model, messages=messages, tools=[SOLVE_TOOL]
-                )
-            except Exception as exc:  # gateway/network failure: report and keep the REPL alive
-                print(f"[gateway error: {exc}]")
-                break
-            msg = response.choices[0].message
-            entry: dict = {"role": "assistant", "content": msg.content or ""}
-            if msg.tool_calls:
-                entry["tool_calls"] = [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-                    }
-                    for tc in msg.tool_calls
-                ]
-            messages.append(entry)
-            if not msg.tool_calls:
-                print(f"\n{msg.content}")
-                break
-            for tc in msg.tool_calls:
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": _run_tool_call(tc.function.arguments),
-                    }
-                )
+        try:
+            reply = run_turn(client, model, messages)
+        except Exception as exc:  # gateway/network failure: report and keep the REPL alive
+            print(f"[gateway error: {exc}]")
+            continue
+        print(f"\n{reply}")

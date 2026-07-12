@@ -28,3 +28,17 @@ to stay under its 2,000-variable/constraint limit.
 ```sh
 uv run pytest
 ```
+
+## Evals
+
+Agentic eval suite (`docs/adr/0004`): a Simulated User improvises from a Fact
+Card against the real chat loop; deterministic scorers grade Profile Fidelity
+and Number Faithfulness in LangSmith experiments. Fact Cards live in
+`copilot/evals/cards/` (the repo is the master; they sync up on each run).
+
+```sh
+export LANGSMITH_API_KEY=...
+export EVAL_SIM_MODEL=...   # optional: simulated-user model, defaults to LLM_MODEL
+
+uv run copilot-evals --runs 3
+```
