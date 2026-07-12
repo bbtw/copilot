@@ -1,16 +1,15 @@
-"""Drive one Scenario: a Simulated User against the real chat loop (ADR-0004).
+"""Drive one Scenario: a Simulated User against the real Agent turn loop (ADR-0004).
 
-The agent side is `chat.run_turn` — the same code the REPL runs. A Scenario
-ends at the first solve_plan call plus the agent's narration turn, or at the
-turn cap without a solve ("no-solve", charged to the agent).
+The agent side is `agent.run_turn` — the same code the REPL runs. A Scenario
+ends at the first solve_plan execution plus the Agent's narration turn, or at
+the turn cap without a solve ("no-solve", charged to the Agent).
 """
 
-import json
 from dataclasses import dataclass
 
 from openai import OpenAI
 
-from ..chat import SYSTEM_PROMPT, run_turn
+from ..agent import SYSTEM_PROMPT, SolveCall, run_turn
 from ..llm import complete
 from .cards import FactCard
 
@@ -40,42 +39,15 @@ _KICKOFF = "(You have just opened the chat. Send your first message.)"
 @dataclass
 class ScenarioRun:
     messages: list[dict]
-    solve_args: dict | None
-    solve_result: dict | None
+    solve: SolveCall | None
     agent_texts: tuple[str, ...]
     sim_texts: tuple[str, ...]
 
 
-def _tool_result(messages: list[dict], start: int, tool_call_id: str) -> dict | None:
-    for entry in messages[start:]:
-        if entry.get("role") == "tool" and entry.get("tool_call_id") == tool_call_id:
-            return json.loads(entry["content"])
-    return None
-
-
-def _first_solve(messages: list[dict], start: int) -> tuple[dict | None, dict | None] | None:
-    for i in range(start, len(messages)):
-        entry = messages[i]
-        if entry["role"] != "assistant":
-            continue
-        for call in entry.get("tool_calls", []):
-            if call["function"]["name"] != "solve_plan":
-                continue
-            try:
-                args = json.loads(call["function"]["arguments"])
-            except json.JSONDecodeError:
-                args = None
-            return args, _tool_result(messages, i + 1, call["id"])
-    return None
-
-
-def _finish(
-    messages: list[dict], solve_args: dict | None, solve_result: dict | None
-) -> ScenarioRun:
+def _finish(messages: list[dict], solve: SolveCall | None) -> ScenarioRun:
     return ScenarioRun(
         messages=messages,
-        solve_args=solve_args,
-        solve_result=solve_result,
+        solve=solve,
         agent_texts=tuple(
             m["content"] for m in messages if m["role"] == "assistant" and m["content"]
         ),
@@ -101,10 +73,8 @@ def run_scenario(
         sim_text = complete(sim_client, sim_model, sim_messages)
         sim_messages.append({"role": "assistant", "content": sim_text})
         messages.append({"role": "user", "content": sim_text})
-        before = len(messages)
-        reply = run_turn(agent_client, agent_model, messages)
-        solve = _first_solve(messages, before)
-        if solve is not None:
-            return _finish(messages, *solve)
-        sim_messages.append({"role": "user", "content": reply})
-    return _finish(messages, None, None)
+        turn = run_turn(agent_client, agent_model, messages)
+        if turn.solves:
+            return _finish(messages, turn.solves[0])
+        sim_messages.append({"role": "user", "content": turn.reply})
+    return _finish(messages, None)

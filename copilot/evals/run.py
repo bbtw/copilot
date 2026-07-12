@@ -16,7 +16,7 @@ from langsmith.evaluation import evaluate
 from langsmith.schemas import Example, Run
 from pydantic import ValidationError
 
-from ..chat import SYSTEM_PROMPT
+from ..agent import SYSTEM_PROMPT
 from ..llm import llm_client
 from ..settings import Settings, sync_langsmith_env
 from .cards import FactCard, load_cards
@@ -127,8 +127,8 @@ def main() -> None:
                 "voided": not audit.passed,
                 "void_reasons": list(audit.reasons),
                 "void_attempts": attempt,
-                "solve_args": run.solve_args,
-                "solve_result": run.solve_result,
+                "solve_args": run.solve.args if run.solve is not None else None,
+                "solve_result": run.solve.result if run.solve is not None else None,
                 "agent_texts": list(run.agent_texts),
                 "sim_texts": list(run.sim_texts),
             }

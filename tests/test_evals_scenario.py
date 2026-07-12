@@ -41,8 +41,9 @@ def test_scenario_ends_at_first_solve_plus_narration() -> None:
         ]
     )
     run = run_scenario(CARD, agent, "agent-model", sim, "sim-model", turn_cap=5)
-    assert run.solve_args == CARD.expected_args
-    assert run.solve_result is not None and "objective_value_after_tax" in run.solve_result
+    assert run.solve is not None
+    assert run.solve.args == CARD.expected_args
+    assert "objective_value_after_tax" in run.solve.result
     assert run.agent_texts[-1] == "Done: here is your plan."
     assert len(run.sim_texts) == 2
 
@@ -51,6 +52,5 @@ def test_scenario_hits_turn_cap_as_no_solve() -> None:
     sim = StubClient([_text(f"sim message {i}") for i in range(3)])
     agent = StubClient([_text(f"agent question {i}") for i in range(3)])
     run = run_scenario(CARD, agent, "agent-model", sim, "sim-model", turn_cap=3)
-    assert run.solve_args is None
-    assert run.solve_result is None
+    assert run.solve is None
     assert len(run.sim_texts) == 3

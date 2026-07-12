@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
+from .plan import Objective
 from .taxdata import (
     DEFAULT_CAPITAL_GAINS_RATE,
     DEFAULT_CONTRIBUTION_LIMIT,
@@ -46,6 +47,41 @@ class Profile:
     expected_return: float = DEFAULT_REAL_RETURN
     capital_gains_rate: float = DEFAULT_CAPITAL_GAINS_RATE
     contribution_limit: float = DEFAULT_CONTRIBUTION_LIMIT
+
+
+_OPTIONAL_FIELDS = (
+    "employer_match", "expected_return", "capital_gains_rate", "contribution_limit",
+)
+
+
+def from_solve_args(args: dict) -> tuple[Profile, Objective]:
+    """Build the run inputs — one Profile + one Objective — from raw solve_plan
+    tool arguments. Raises KeyError/ValueError on missing or malformed fields."""
+    objective = Objective(args["objective"])
+    kwargs = {
+        "current_age": int(args["current_age"]),
+        "retirement_age": int(args["retirement_age"]),
+        "horizon_age": int(args["horizon_age"]),
+        "filing_status": FilingStatus(args["filing_status"]),
+        "gross_income": float(args["gross_income"]),
+        "savings_capacity": float(args["savings_capacity"]),
+        "spending_need": float(args["spending_need"]),
+        "balance_traditional": float(args["balance_traditional"]),
+        "balance_roth": float(args["balance_roth"]),
+        "balance_taxable": float(args["balance_taxable"]),
+        "income_streams": tuple(
+            IncomeStream(
+                kind=IncomeKind(s["kind"]),
+                annual_amount=float(s["annual_amount"]),
+                start_age=int(s["start_age"]),
+            )
+            for s in args.get("income_streams", [])
+        ),
+    }
+    for field in _OPTIONAL_FIELDS:
+        if args.get(field) is not None:
+            kwargs[field] = float(args[field])
+    return Profile(**kwargs), objective
 
 
 def validate(profile: Profile) -> None:

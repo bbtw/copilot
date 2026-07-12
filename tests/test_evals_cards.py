@@ -1,9 +1,9 @@
 import pytest
 
-from copilot.chat import _profile_from_args
 from copilot.evals.cards import card_numbers, load_cards
 from copilot.model import solve
 from copilot.plan import Infeasible, Plan
+from copilot.profile import from_solve_args
 
 CARDS = load_cards()
 
@@ -21,13 +21,13 @@ def test_all_families_represented() -> None:
 
 @pytest.mark.parametrize("card", CARDS, ids=lambda c: c.name)
 def test_expected_args_build_a_valid_profile(card) -> None:
-    profile, objective = _profile_from_args(card.expected_args)
+    profile, objective = from_solve_args(card.expected_args)
     assert profile is not None and objective is not None
 
 
 @pytest.mark.parametrize("card", CARDS, ids=lambda c: c.name)
 def test_card_solves_as_its_family_claims(card) -> None:
-    profile, objective = _profile_from_args(card.expected_args)
+    profile, objective = from_solve_args(card.expected_args)
     result = solve(profile, objective)
     if card.family == "infeasible_profile":
         assert isinstance(result, Infeasible)

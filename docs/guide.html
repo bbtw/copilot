@@ -469,11 +469,19 @@
       <div class="filetree">
         <div class="filetree-group">copilot/</div>
         <details>
-          <summary><span class="path">chat.py</span><span class="gist">Terminal REPL and the shared tool-calling loop</span></summary>
+          <summary><span class="path">agent.py</span><span class="gist">The Agent &mdash; prompt, solve_plan tool, and the turn loop</span></summary>
           <div class="detail">Defines <code>SYSTEM_PROMPT</code>, the <code>solve_plan</code> tool
           schema, and <code>run_turn()</code> &mdash; the loop that calls the model, executes any
-          tool calls, and repeats until the assistant replies in plain text. Both the REPL's
-          <code>main()</code> and the eval harness drive this exact same function.</div>
+          tool calls, and repeats until the assistant replies in plain text. Each turn returns a
+          <code>TurnResult</code> recording every solve (raw arguments, result dict, and the
+          solved <code>Plan</code>), so the REPL and the eval harness read what happened instead
+          of re-parsing the transcript.</div>
+        </details>
+        <details>
+          <summary><span class="path">chat.py</span><span class="gist">Terminal REPL &mdash; one frontend to the Agent</span></summary>
+          <div class="detail"><code>copilot</code>'s <code>main()</code>: the input loop.
+          Renders each solved Plan's year-by-year table, then prints the Agent's
+          narration.</div>
         </details>
         <details>
           <summary><span class="path">model.py</span><span class="gist">The Gurobi LP &mdash; builds and solves fresh on every call</span></summary>
@@ -493,9 +501,10 @@
         <details>
           <summary><span class="path">profile.py</span><span class="gist">The Profile &mdash; typed inputs the solver needs</span></summary>
           <div class="detail">The <code>Profile</code> dataclass (ages, balances, income, filing
-          status, overrides) and <code>validate()</code>, which raises chat-presentable
-          <code>ValueError</code>s for out-of-range ages, negative amounts, or a horizon before
-          retirement.</div>
+          status, overrides), <code>from_solve_args()</code> &mdash; raw <code>solve_plan</code>
+          arguments to one Profile + one Objective &mdash; and <code>validate()</code>, which
+          raises chat-presentable <code>ValueError</code>s for out-of-range ages, negative
+          amounts, or a horizon before retirement.</div>
         </details>
         <details>
           <summary><span class="path">taxdata.py</span><span class="gist">2026 federal tax data and every model default</span></summary>

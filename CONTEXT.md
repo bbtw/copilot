@@ -87,6 +87,10 @@ _Avoid_: Nominal dollars, future dollars (never appear anywhere in the system �
 Progressive federal ordinary-income brackets (with filing status and standard deduction as User inputs), plus a flat capital-gains rate on the Taxable Account. No state tax at v1. Kept convex so the optimization stays a pure LP — tax features that break convexity (e.g., Social Security benefit taxation phase-in) are out of scope until that constraint is consciously dropped.
 _Avoid_: Effective rate, flat rate (a flat ordinary-income rate collapses the optimization to a corner solution)
 
+**Agent**:
+The chat side of the system — the system prompt, the solve_plan tool, and the turn loop that drives them. The terminal REPL and the eval Scenario are its two frontends; it is the thing Profile Fidelity and Number Faithfulness score.
+_Avoid_: Bot, chatbot; assistant (the prompt's word for how the Agent speaks, not a system component)
+
 ### Evaluation
 
 **Simulated User**:
@@ -102,15 +106,15 @@ The eval dimension asking: do the raw solve_plan arguments match the Fact Card e
 _Avoid_: Extraction accuracy (fidelity includes not inventing fields, not just extracting stated ones)
 
 **Number Faithfulness**:
-The eval dimension asking: does every number in the agent's prose match a source value — the solve_plan result (or, for an infeasible Profile, the solver's infeasibility reason), the Fact Card, an age within the plan, or a taxdata default — either exactly or rounded to the significant digits displayed ("$1.2M" matches 1,203,456; "$1.25M" does not; derived arithmetic such as "$40k/year" from a $320k total always fails).
+The eval dimension asking: does every number in the Agent's prose match a source value — the solve_plan result (or, for an infeasible Profile, the solver's infeasibility reason), the Fact Card, an age within the plan, or a taxdata default — either exactly or rounded to the significant digits displayed ("$1.2M" matches 1,203,456; "$1.25M" does not; derived arithmetic such as "$40k/year" from a $320k total always fails).
 _Avoid_: Hallucination check (derived arithmetic from real figures also fails, not just invented numbers)
 
 **Scenario**:
-One eval unit: a Fact Card conversation driven to the first solve_plan call plus the agent's narration turn, under a hard turn cap — reaching the cap without a solve scores as failure ("no-solve"), not as an error.
+One eval unit: a Fact Card conversation driven to the first solve_plan call plus the Agent's narration turn, under a hard turn cap — reaching the cap without a solve scores as failure ("no-solve"), not as an error.
 _Avoid_: Test case (a Scenario's transcript differs run to run; only the Fact Card is fixed)
 
 **Voided Run**:
-A Scenario run discarded because the Simulated User stated a number not on its Fact Card (audited with the same extractor as Number Faithfulness); voided runs are retried and reported separately, never counted as agent failures.
+A Scenario run discarded because the Simulated User stated a number not on its Fact Card (audited with the same extractor as Number Faithfulness); voided runs are retried and reported separately, never counted as Agent failures.
 _Avoid_: Flake (voids are attributed to the sim side by construction, not unexplained)
 
 ## Relationships
@@ -123,7 +127,7 @@ _Avoid_: Flake (voids are attributed to the sim side by construction, not unexpl
 - A run consumes one **Profile** + one **Objective** and produces one **Plan**; a **What-If** is just another run
 - If a Profile is infeasible (e.g. Spending Need can't be met, or Taxable can't bridge to age 59½), there is no Plan — the chat explains the infeasibility instead
 - A **Scenario** pairs one **Fact Card** with one **Simulated User**; repeated runs (three per suite invocation) yield two suite scores — the **Profile Fidelity** rate and the **Number Faithfulness** rate — never blended into one number
-- A **Voided Run** is charged to the Simulated User, never to the agent; a no-solve run is charged to the agent, never to the harness
+- A **Voided Run** is charged to the Simulated User, never to the Agent; a no-solve run is charged to the Agent, never to the harness
 
 ## Example dialogue
 

@@ -9,7 +9,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..chat import SOLVE_TOOL
+from ..agent import SOLVE_TOOL
 from .numbers import extract_numbers, numbers_in
 
 CARDS_DIR = Path(__file__).parent / "cards"
