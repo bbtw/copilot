@@ -1,0 +1,1008 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Retirement Optimizer — Codebase Guide</title>
+<style>
+  :root {
+    --paper: #ECEFEA;
+    --surface: #FFFFFF;
+    --surface-2: #F3F5EF;
+    --ink: #16211C;
+    --ink-soft: #4B584F;
+    --line: #D7DCD1;
+    --accent: #2C6E7A;
+    --accent-soft: #DDEBEC;
+    --gold: #8C6A1F;
+    --gold-soft: #F1E6CC;
+    --trad: #34617F;
+    --trad-soft: #DDE8EE;
+    --taxable: #6E5A78;
+    --taxable-soft: #E9E2EC;
+    --pass: #3F7D4C;
+    --pass-soft: #DEEFE1;
+    --fail: #B14A32;
+    --fail-soft: #F4E2DC;
+    --radius-sm: 6px;
+    --radius-md: 9px;
+    --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #111713;
+      --surface: #182019;
+      --surface-2: #1E271F;
+      --ink: #E7ECE4;
+      --ink-soft: #A9B3A2;
+      --line: #2C362C;
+      --accent: #5FB0BC;
+      --accent-soft: #1D3236;
+      --gold: #D2A24E;
+      --gold-soft: #33291A;
+      --trad: #7FB3D6;
+      --trad-soft: #1C2A32;
+      --taxable: #C6ABD3;
+      --taxable-soft: #2A2130;
+      --pass: #6FCB84;
+      --pass-soft: #1B2E1E;
+      --fail: #E08064;
+      --fail-soft: #33231C;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #111713; --surface: #182019; --surface-2: #1E271F;
+    --ink: #E7ECE4; --ink-soft: #A9B3A2; --line: #2C362C;
+    --accent: #5FB0BC; --accent-soft: #1D3236;
+    --gold: #D2A24E; --gold-soft: #33291A;
+    --trad: #7FB3D6; --trad-soft: #1C2A32;
+    --taxable: #C6ABD3; --taxable-soft: #2A2130;
+    --pass: #6FCB84; --pass-soft: #1B2E1E;
+    --fail: #E08064; --fail-soft: #33231C;
+  }
+  :root[data-theme="light"] {
+    --paper: #ECEFEA; --surface: #FFFFFF; --surface-2: #F3F5EF;
+    --ink: #16211C; --ink-soft: #4B584F; --line: #D7DCD1;
+    --accent: #2C6E7A; --accent-soft: #DDEBEC;
+    --gold: #8C6A1F; --gold-soft: #F1E6CC;
+    --trad: #34617F; --trad-soft: #DDE8EE;
+    --taxable: #6E5A78; --taxable-soft: #E9E2EC;
+    --pass: #3F7D4C; --pass-soft: #DEEFE1;
+    --fail: #B14A32; --fail-soft: #F4E2DC;
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--paper); }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+  }
+  html { scroll-behavior: smooth; }
+
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, button:focus-visible, label:focus-within, summary:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px;
+  }
+  input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+  h1, h2, h3 { font-family: var(--font-display); font-weight: 600; text-wrap: balance; color: var(--ink); }
+  h1 { font-size: 2.15rem; margin: 0 0 .5rem; letter-spacing: -0.01em; }
+  h2 { font-size: 1.5rem; margin: 0 0 .9rem; padding-top: .2rem; }
+  h3 { font-size: 1.05rem; margin: 0 0 .4rem; }
+  p { margin: 0 0 1rem; }
+  .prose { max-width: 68ch; color: var(--ink); }
+  .prose.soft, .lede { color: var(--ink-soft); }
+
+  .eyebrow {
+    font-family: var(--font-mono); font-size: .72rem; text-transform: uppercase;
+    letter-spacing: .12em; color: var(--accent); font-weight: 600; margin: 0 0 .6rem;
+  }
+
+  code, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+  /* ---- page shell ---- */
+  .page {
+    display: grid;
+    grid-template-columns: 232px minmax(0, 1fr);
+    gap: 3rem;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 6rem;
+  }
+  @media (max-width: 900px) {
+    .page { grid-template-columns: 1fr; gap: 1.5rem; padding: 1.25rem 1rem 4rem; }
+  }
+
+  nav.toc {
+    position: sticky; top: 2rem; align-self: start;
+    display: flex; flex-direction: column; gap: .15rem;
+    font-family: var(--font-mono); font-size: .82rem;
+  }
+  nav.toc a {
+    color: var(--ink-soft); text-decoration: none; padding: .4rem .6rem;
+    border-radius: var(--radius-sm); border-left: 2px solid transparent;
+  }
+  nav.toc a:hover { color: var(--ink); background: var(--surface-2); }
+  nav.toc a.current { color: var(--accent); border-left-color: var(--accent); background: var(--surface-2); }
+  @media (max-width: 900px) {
+    nav.toc {
+      position: sticky; top: 0; z-index: 20; flex-direction: row; overflow-x: auto;
+      background: var(--paper); padding: .75rem 0; margin: 0 -1rem; padding-left: 1rem;
+      border-bottom: 1px solid var(--line);
+    }
+    nav.toc a { white-space: nowrap; }
+  }
+
+  main { min-width: 0; }
+  section { padding: 3rem 0; border-top: 1px solid var(--line); }
+  section#overview { border-top: none; padding-top: 0; }
+  section > .eyebrow:first-child { margin-top: 0; }
+
+  /* ---- header / stats ---- */
+  .badges { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1.3rem 0 0; }
+  .badge {
+    font-family: var(--font-mono); font-size: .74rem; padding: .3rem .6rem;
+    border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink-soft);
+    background: var(--surface);
+  }
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1px; background: var(--line); border: 1px solid var(--line);
+    margin-top: 2rem; border-radius: var(--radius-md); overflow: hidden;
+  }
+  .stat { background: var(--surface); padding: 1rem 1.1rem; }
+  .stat .n { font-family: var(--font-mono); font-size: 1.5rem; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: .78rem; color: var(--ink-soft); margin-top: .15rem; }
+
+  /* ---- flow diagrams ---- */
+  .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: .5rem; margin: 1.5rem 0 .5rem; }
+  .flow-step {
+    flex: 1 1 200px; background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius-md); padding: .9rem 1rem;
+  }
+  .flow-step[open] { background: var(--surface-2); }
+  .flow-step summary {
+    cursor: pointer; list-style: none; font-weight: 600; font-size: .95rem;
+    display: flex; align-items: baseline; justify-content: space-between; gap: .5rem;
+  }
+  .flow-step summary::-webkit-details-marker { display: none; }
+  .flow-step summary::after {
+    content: "+"; font-family: var(--font-mono); color: var(--accent); font-weight: 400;
+  }
+  .flow-step[open] summary::after { content: "\2013"; }
+  .flow-step p { margin: .6rem 0 0; font-size: .9rem; color: var(--ink-soft); }
+  .flow-step .idx { font-family: var(--font-mono); font-size: .72rem; color: var(--accent); display: block; margin-bottom: .2rem; }
+  .flow-step-title { font-weight: 600; font-size: .95rem; }
+  .flow-arrow { align-self: center; color: var(--ink-soft); font-size: 1.1rem; padding: 0 .1rem; }
+  @media (max-width: 640px) { .flow-arrow { transform: rotate(90deg); } }
+
+  /* ---- domain cards ---- */
+  .account-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+  .account-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 1.1rem 1.2rem; }
+  .account-card h3 { display: flex; align-items: center; gap: .5rem; }
+  .dot { width: .6rem; height: .6rem; border-radius: 50%; display: inline-block; flex: none; }
+  .account-card p { font-size: .9rem; color: var(--ink-soft); margin: 0; }
+  .account-card.trad .dot { background: var(--trad); } .account-card.trad h3 { color: var(--trad); }
+  .account-card.roth .dot { background: var(--gold); } .account-card.roth h3 { color: var(--gold); }
+  .account-card.taxable .dot { background: var(--taxable); } .account-card.taxable h3 { color: var(--taxable); }
+
+  .pill { font-family: var(--font-mono); font-size: .68rem; padding: .18rem .5rem; border-radius: 20px; font-weight: 600; letter-spacing: .02em; }
+  .pill.trad { background: var(--trad-soft); color: var(--trad); }
+  .pill.roth { background: var(--gold-soft); color: var(--gold); }
+  .pill.taxable { background: var(--taxable-soft); color: var(--taxable); }
+  .pill.pass { background: var(--pass-soft); color: var(--pass); }
+  .pill.fail { background: var(--fail-soft); color: var(--fail); }
+
+  .timeline { display: flex; margin: 1.5rem 0; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; }
+  .timeline .phase { flex: 1; padding: 1rem 1.1rem; font-size: .87rem; }
+  .timeline .phase:first-child { background: var(--trad-soft); border-right: 1px solid var(--line); }
+  .timeline .phase:last-child { background: var(--gold-soft); }
+  .timeline .phase strong { display: block; font-family: var(--font-mono); font-size: .74rem; text-transform: uppercase; letter-spacing: .07em; margin-bottom: .4rem; }
+  .timeline .phase:first-child strong { color: var(--trad); }
+  .timeline .phase:last-child strong { color: var(--gold); }
+
+  .callout {
+    border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    background: var(--surface); border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: .9rem 1.1rem; margin: 1.5rem 0; font-size: .9rem; color: var(--ink-soft);
+  }
+  .callout strong { color: var(--ink); }
+
+  /* ---- codebase map ---- */
+  .filetree { border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; background: var(--surface); }
+  .filetree-group { font-family: var(--font-mono); font-size: .74rem; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-soft); padding: .6rem 1rem; background: var(--surface-2); border-top: 1px solid var(--line); }
+  .filetree-group:first-child { border-top: none; }
+  .filetree details { border-top: 1px solid var(--line); }
+  .filetree details:first-of-type { border-top: none; }
+  .filetree summary { list-style: none; cursor: pointer; padding: .7rem 1rem; display: flex; align-items: baseline; gap: .7rem; }
+  .filetree summary::-webkit-details-marker { display: none; }
+  .filetree summary .path { font-family: var(--font-mono); font-size: .87rem; color: var(--ink); font-weight: 600; flex: none; }
+  .filetree summary .gist { font-size: .84rem; color: var(--ink-soft); }
+  .filetree summary::after { content: "+"; margin-left: auto; font-family: var(--font-mono); color: var(--accent); }
+  .filetree details[open] summary::after { content: "\2013"; }
+  .filetree .detail { padding: 0 1rem 1rem 1rem; font-size: .87rem; color: var(--ink-soft); max-width: 62ch; }
+  .filetree .detail code { background: var(--surface-2); padding: .1rem .3rem; border-radius: 4px; font-size: .82rem; }
+
+  /* ---- code blocks + copy ---- */
+  .code-block { position: relative; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-md); margin: 1rem 0; overflow-x: auto; }
+  .code-block pre { margin: 0; padding: 1rem 3.2rem 1rem 1.1rem; }
+  .code-block code { font-size: .83rem; white-space: pre; color: var(--ink); line-height: 1.65; }
+  .copy-btn {
+    position: absolute; top: .55rem; right: .55rem; font-family: var(--font-mono); font-size: .68rem;
+    padding: .3rem .55rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm);
+    color: var(--ink-soft); cursor: pointer;
+  }
+  .copy-btn:hover { color: var(--ink); border-color: var(--accent); }
+
+  /* ---- CSS-only tabs ---- */
+  .tabs { margin: 1.5rem 0; }
+  .tabs input[type="radio"] { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .tab-labels { display: flex; flex-wrap: wrap; gap: .35rem; border-bottom: 1px solid var(--line); margin-bottom: 1.2rem; }
+  .tab-labels label {
+    font-family: var(--font-mono); font-size: .82rem; padding: .55rem .9rem; cursor: pointer;
+    color: var(--ink-soft); border-radius: var(--radius-sm) var(--radius-sm) 0 0; margin-bottom: -1px;
+    border: 1px solid transparent;
+  }
+  .tab-panels .panel { display: none; }
+  #t-repl:checked ~ .tab-panels #p-repl,
+  #t-tests:checked ~ .tab-panels #p-tests,
+  #t-evalsrun:checked ~ .tab-panels #p-evalsrun { display: block; }
+  #t-repl:checked ~ .tab-labels label[for="t-repl"],
+  #t-tests:checked ~ .tab-labels label[for="t-tests"],
+  #t-evalsrun:checked ~ .tab-labels label[for="t-evalsrun"] {
+    color: var(--accent); border-color: var(--line); border-bottom-color: var(--surface); background: var(--surface);
+  }
+
+  .card-tabs .tab-labels label { display: flex; flex-direction: column; gap: .3rem; align-items: flex-start; padding: .6rem .8rem; }
+  .card-tabs .tab-labels .fam { font-size: .62rem; }
+  #c-mcs:checked ~ .tab-panels #cp-mcs,
+  #c-mep:checked ~ .tab-panels #cp-mep,
+  #c-cro:checked ~ .tab-panels #cp-cro,
+  #c-heo:checked ~ .tab-panels #cp-heo,
+  #c-erb:checked ~ .tab-panels #cp-erb,
+  #c-ros:checked ~ .tab-panels #cp-ros { display: block; }
+  #c-mcs:checked ~ .tab-labels label[for="c-mcs"],
+  #c-mep:checked ~ .tab-labels label[for="c-mep"],
+  #c-cro:checked ~ .tab-labels label[for="c-cro"],
+  #c-heo:checked ~ .tab-labels label[for="c-heo"],
+  #c-erb:checked ~ .tab-labels label[for="c-erb"],
+  #c-ros:checked ~ .tab-labels label[for="c-ros"] {
+    color: var(--accent); border-color: var(--line); border-bottom-color: var(--surface); background: var(--surface);
+  }
+
+  .card-panel { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 1.5rem; }
+  @media (max-width: 720px) { .card-panel { grid-template-columns: 1fr; } }
+  .card-panel .facts { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 1rem 1.1rem; font-size: .89rem; }
+  .card-panel .facts ul { margin: .5rem 0 0; padding-left: 1.1rem; }
+  .card-panel .facts li { margin-bottom: .3rem; color: var(--ink-soft); }
+  .args-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+  .args-table th { text-align: left; font-family: var(--font-mono); font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); padding-bottom: .4rem; border-bottom: 1px solid var(--line); }
+  .args-table td { padding: .38rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .args-table td.k { font-family: var(--font-mono); color: var(--ink-soft); white-space: nowrap; padding-right: .8rem; }
+  .args-table td.v { font-family: var(--font-mono); color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+  .args-table tr:last-child td { border-bottom: none; }
+
+  /* ---- ADRs ---- */
+  .adr { border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); margin-bottom: .9rem; }
+  .adr summary { list-style: none; cursor: pointer; padding: 1rem 1.1rem; display: flex; align-items: baseline; gap: .8rem; }
+  .adr summary::-webkit-details-marker { display: none; }
+  .adr .num { font-family: var(--font-mono); font-size: .78rem; color: var(--gold); background: var(--gold-soft); padding: .15rem .45rem; border-radius: 4px; flex: none; }
+  .adr summary .title { font-weight: 600; }
+  .adr summary::after { content: "+"; margin-left: auto; font-family: var(--font-mono); color: var(--accent); }
+  .adr[open] summary::after { content: "\2013"; }
+  .adr .body { padding: 0 1.1rem 1.1rem calc(1.1rem + 2.5rem); font-size: .89rem; color: var(--ink-soft); max-width: 62ch; }
+  .adr .body p { margin: 0 0 .7rem; }
+  .adr .body ul { padding-left: 1.1rem; margin: 0; }
+  .adr .body li { margin-bottom: .4rem; }
+
+  footer.end { border-top: 1px solid var(--line); padding-top: 1.5rem; margin-top: 1rem; font-size: .82rem; color: var(--ink-soft); }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <nav class="toc" aria-label="Sections">
+    <a href="#overview">Overview</a>
+    <a href="#how-it-works">How it works</a>
+    <a href="#domain-model">Domain model</a>
+    <a href="#codebase">Codebase map</a>
+    <a href="#running">Running it</a>
+    <a href="#evals">Evals</a>
+    <a href="#decisions">Design decisions</a>
+  </nav>
+
+  <main>
+    <section id="overview">
+      <p class="eyebrow">Codebase Guide</p>
+      <h1>Retirement Planning Optimizer</h1>
+      <p class="prose lede">
+        A chat-driven retirement planner: you describe your situation in plain language, an LLM
+        fills a typed Profile, and a Gurobi linear program finds the tax-optimal contribution,
+        withdrawal, and Roth-conversion schedule. The LLM never computes a number itself —
+        every figure in the reply comes from the solver.
+      </p>
+      <div class="badges">
+        <span class="badge">Python 3.12+</span>
+        <span class="badge">uv-managed</span>
+        <span class="badge">Gurobi LP</span>
+        <span class="badge">OpenAI-compatible gateway</span>
+        <span class="badge">LangSmith traced</span>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="n">5</div><div class="l">core modules</div></div>
+        <div class="stat"><div class="n">6</div><div class="l">Fact Cards</div></div>
+        <div class="stat"><div class="n">2</div><div class="l">eval dimensions</div></div>
+        <div class="stat"><div class="n">4</div><div class="l">ADRs</div></div>
+      </div>
+    </section>
+
+    <section id="how-it-works">
+      <p class="eyebrow">Principle</p>
+      <h2>LLM translates, solver decides</h2>
+      <p class="prose">
+        The chat interface is an LLM; the retirement math is a fixed, hand-written Gurobi LP
+        formulation. The LLM's only job is translation in both directions — natural language into
+        a typed <code>Profile</code>, solver output into narration — connected by one tool call,
+        <code>solve_plan</code>. Click a step for what actually happens there.
+      </p>
+      <div class="flow">
+        <details class="flow-step" open>
+          <summary><span><span class="idx">01</span>You describe your situation</span></summary>
+          <p>Plain-language chat: ages, income, account balances, guaranteed income, and which
+          objective to maximize. No form, no fields — the assistant asks for whatever it's
+          still missing.</p>
+        </details>
+        <span class="flow-arrow" aria-hidden="true">&#8594;</span>
+        <details class="flow-step">
+          <summary><span><span class="idx">02</span>LLM fills the Profile</span></summary>
+          <p>The model's job here is translation only: natural language &#8594; the typed
+          <code>solve_plan</code> arguments. It states the defaults it applied (5% return, 15%
+          capital gains, $24,500 limit) so you can override them, and never invents a figure
+          you didn't state.</p>
+        </details>
+        <span class="flow-arrow" aria-hidden="true">&#8594;</span>
+        <details class="flow-step">
+          <summary><span><span class="idx">03</span>Gurobi solves the lifetime LP</span></summary>
+          <p><code>model.py</code> builds one linear program per call: a Contribution Split for
+          the Accumulation years, a Withdrawal Schedule and Roth Conversions for Decumulation —
+          subject to contribution limits, RMDs, and the age-60 early-withdrawal lock. Progressive
+          tax brackets stay convex, so no binary variables are needed.</p>
+        </details>
+        <span class="flow-arrow" aria-hidden="true">&#8594;</span>
+        <details class="flow-step">
+          <summary><span><span class="idx">04</span>LLM narrates the Plan</span></summary>
+          <p>The full year-by-year table prints straight to your terminal; the LLM only receives
+          a compact summary and narrates <em>that</em>. Every number in its reply must trace back
+          to the summary — rounded for readability, never computed or derived.</p>
+        </details>
+      </div>
+      <div class="callout">
+        <strong>What-if questions</strong> ("what if I retire at 62?") are handled as Profile
+        mutation + re-solve — never as the LLM extrapolating from a previous answer. Same loop,
+        new inputs.
+      </div>
+    </section>
+
+    <section id="domain-model">
+      <p class="eyebrow">Language</p>
+      <h2>Three accounts, two phases, one objective</h2>
+      <p class="prose">
+        Real-world account types (401(k), IRA) are collapsed into exactly three tax-treatment
+        buckets. The system never distinguishes further than this.
+      </p>
+      <div class="account-grid">
+        <div class="account-card trad">
+          <h3><span class="dot"></span>Traditional</h3>
+          <p>Pre-tax. Withdrawals are taxed as ordinary income. Shares one combined annual
+          contribution limit with Roth ($24,500 default). Required Minimum Distributions start
+          at 73, sized by the IRS Uniform Lifetime Table — why unconverted balances eventually
+          get force-taxed.</p>
+        </div>
+        <div class="account-card roth">
+          <h3><span class="dot"></span>Roth</h3>
+          <p>Post-tax. Withdrawals are tax-free. Shares the same combined limit with Traditional.
+          No RMDs, ever. A Traditional&#8594;Roth conversion is taxed as ordinary income in the
+          conversion year and doesn't count toward RMD satisfaction.</p>
+        </div>
+        <div class="account-card taxable">
+          <h3><span class="dot"></span>Taxable</h3>
+          <p>An ordinary brokerage account — unlimited contributions. Growth is taxed annually as
+          a flat capital-gains drag (15% default) instead of tracking cost basis: a deliberate
+          simplification that slightly over-favors the tax-advantaged accounts.</p>
+        </div>
+      </div>
+
+      <div class="timeline">
+        <div class="phase">
+          <strong>Accumulation &middot; current age &#8594; retirement age</strong>
+          The solver decides the <strong>Contribution Split</strong>: how Savings Capacity divides
+          across the three accounts each year, under the contribution limit.
+        </div>
+        <div class="phase">
+          <strong>Decumulation &middot; retirement age &#8594; plan horizon</strong>
+          The solver decides the <strong>Withdrawal Schedule</strong> and Roth Conversions.
+          Traditional/Roth withdrawals are locked before age 60 &mdash; if Taxable can't bridge
+          that gap, the plan is infeasible. RMDs become a hard floor from age 73.
+        </div>
+      </div>
+
+      <p class="prose">
+        Every run maximizes exactly one <strong>Objective</strong>, measured in
+        <strong>After-Tax Value</strong> &mdash; Roth and Taxable at face, Traditional at face
+        minus what a bracket-taxed liquidation would cost. Raw balances are never compared
+        across accounts.
+      </p>
+      <div class="account-grid" style="grid-template-columns: repeat(auto-fit, minmax(230px,1fr));">
+        <div class="account-card" style="border-left:3px solid var(--accent);">
+          <h3 style="color:var(--accent);">Wealth at Retirement</h3>
+          <p>After-Tax Value of the balances the instant Decumulation starts. Later years must
+          still meet Spending Need, but don't affect the objective.</p>
+        </div>
+        <div class="account-card" style="border-left:3px solid var(--accent);">
+          <h3 style="color:var(--accent);">Terminal Wealth</h3>
+          <p>After-Tax Value at the Plan Horizon &mdash; the end of Decumulation. What's left
+          after a full retirement of spending.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>Real dollars, always.</strong> Bracket thresholds, contribution limits, Savings
+        Capacity, and Spending Need stay constant across plan years; Expected Return is a real
+        (after-inflation) rate. No inflation parameter exists anywhere in the model.
+      </div>
+    </section>
+
+    <section id="codebase">
+      <p class="eyebrow">Layout</p>
+      <h2>Codebase map</h2>
+      <p class="prose">Click a file for what it owns.</p>
+      <div class="filetree">
+        <div class="filetree-group">copilot/</div>
+        <details>
+          <summary><span class="path">chat.py</span><span class="gist">Terminal REPL and the shared tool-calling loop</span></summary>
+          <div class="detail">Defines <code>SYSTEM_PROMPT</code>, the <code>solve_plan</code> tool
+          schema, and <code>run_turn()</code> &mdash; the loop that calls the model, executes any
+          tool calls, and repeats until the assistant replies in plain text. Both the REPL's
+          <code>main()</code> and the eval harness drive this exact same function.</div>
+        </details>
+        <details>
+          <summary><span class="path">model.py</span><span class="gist">The Gurobi LP &mdash; builds and solves fresh on every call</span></summary>
+          <div class="detail"><code>solve(profile, objective)</code> constructs one linear program
+          per invocation: per-year contribution, withdrawal, conversion, and balance variables,
+          with progressive-bracket income modeled as convex piecewise-linear segments (no binary
+          variables). Checked against <code>GUROBI_TRIAL_LIMIT = 2000</code> before optimizing
+          &mdash; the free pip-license variable/constraint cap.</div>
+        </details>
+        <details>
+          <summary><span class="path">plan.py</span><span class="gist">The Plan &mdash; the solver's output, and the only source of numbers</span></summary>
+          <div class="detail"><code>Plan</code> / <code>YearRow</code> / <code>Infeasible</code>
+          dataclasses, plus two renderers: <code>render_table()</code> (the full fixed-width
+          year-by-year table, printed straight to the terminal) and <code>to_summary()</code>
+          (the compact dict handed to the LLM &mdash; the only thing it's allowed to narrate).</div>
+        </details>
+        <details>
+          <summary><span class="path">profile.py</span><span class="gist">The Profile &mdash; typed inputs the solver needs</span></summary>
+          <div class="detail">The <code>Profile</code> dataclass (ages, balances, income, filing
+          status, overrides) and <code>validate()</code>, which raises chat-presentable
+          <code>ValueError</code>s for out-of-range ages, negative amounts, or a horizon before
+          retirement.</div>
+        </details>
+        <details>
+          <summary><span class="path">taxdata.py</span><span class="gist">2026 federal tax data and every model default</span></summary>
+          <div class="detail">Progressive brackets and standard deduction by filing status, the
+          IRS Uniform Lifetime Table for RMDs, and the defaults the chat mentions: 5% real return,
+          15% capital gains, $24,500 combined contribution limit, 85% Social Security taxable
+          fraction, age-60 early-withdrawal stand-in.</div>
+        </details>
+        <div class="filetree-group">copilot/evals/</div>
+        <details>
+          <summary><span class="path">run.py</span><span class="gist">Entry point &mdash; syncs Fact Cards, runs the LangSmith experiment</span></summary>
+          <div class="detail"><code>copilot-evals</code>'s <code>main()</code>. Mirrors repo Fact
+          Cards up to a LangSmith dataset (repo is master), then calls <code>evaluate()</code>
+          with the three evaluators and <code>num_repetitions</code> runs per Scenario, tagged
+          with the git SHA and a hash of the system prompt.</div>
+        </details>
+        <details>
+          <summary><span class="path">scenario.py</span><span class="gist">Drives one Scenario: Simulated User vs. the real chat loop</span></summary>
+          <div class="detail"><code>run_scenario()</code> alternates a Simulated User (an LLM
+          reading only the Fact Card) with the agent's own <code>run_turn()</code>, up to
+          <code>TURN_CAP = 12</code>, and captures the first <code>solve_plan</code> call.</div>
+        </details>
+        <details>
+          <summary><span class="path">scoring.py</span><span class="gist">The two deterministic scorers, plus the sim-side audit</span></summary>
+          <div class="detail"><code>profile_fidelity()</code>, <code>number_faithfulness()</code>,
+          and <code>audit_sim()</code> &mdash; all plain dict/string comparisons, no LLM
+          involved.</div>
+        </details>
+        <details>
+          <summary><span class="path">numbers.py</span><span class="gist">Number extraction and significant-digit matching</span></summary>
+          <div class="detail">Regex-based <code>extract_numbers()</code> plus
+          <code>matches_source()</code>: a displayed figure matches if it equals a source value
+          rounded to the digits actually shown.</div>
+        </details>
+        <details>
+          <summary><span class="path">cards.py</span><span class="gist">Loads and validates the Fact Card JSON files</span></summary>
+          <div class="detail"><code>load_cards()</code> checks every card's
+          <code>expected_args</code> against the live <code>solve_plan</code> schema, so a card
+          can't drift from the tool it's testing.</div>
+        </details>
+        <details>
+          <summary><span class="path">cards/*.json</span><span class="gist">Six Fact Cards &mdash; script and answer key in one file</span></summary>
+          <div class="detail">See the explorer in <a href="#evals">Evals</a> below for all six,
+          grouped by family: <code>happy_path</code>, <code>stated_overrides</code>,
+          <code>infeasible_profile</code>.</div>
+        </details>
+      </div>
+    </section>
+
+    <section id="running">
+      <p class="eyebrow">Try it</p>
+      <h2>Running it</h2>
+      <p class="prose soft" style="font-size:.9rem;">Requires Python 3.12+ and
+      <a href="https://docs.astral.sh/uv/">uv</a>. Install once with <code>uv sync</code>, then
+      set the env vars below in your shell, or drop them in a gitignored <code>.env</code> file
+      in the repo root &mdash; <code>copilot/settings.py</code> (Pydantic Settings) loads it
+      automatically, no shell sourcing needed.</p>
+      <div class="tabs">
+        <input type="radio" name="run-tabs" id="t-repl" checked>
+        <input type="radio" name="run-tabs" id="t-tests">
+        <input type="radio" name="run-tabs" id="t-evalsrun">
+        <div class="tab-labels">
+          <label for="t-repl">Chat REPL</label>
+          <label for="t-tests">Tests</label>
+          <label for="t-evalsrun">Evals</label>
+        </div>
+        <div class="tab-panels">
+          <div class="panel" id="p-repl">
+            <div class="code-block">
+              <button class="copy-btn" type="button">Copy</button>
+              <pre><code># paste as-is into a gitignored .env, or run each line in your shell
+export LLM_GATEWAY_BASE_URL=...   # company OpenAI-compatible gateway
+export LLM_GATEWAY_API_KEY=...
+export LLM_MODEL=...              # model name your gateway routes
+export LANGSMITH_TRACING=true     # optional: full tracing
+export LANGSMITH_API_KEY=...
+
+uv run copilot</code></pre>
+            </div>
+            <p class="prose soft" style="font-size:.9rem;">Gurobi runs on the free pip license
+            (no license file needed); the model is sized to stay under its 2,000-variable /
+            2,000-constraint limit.</p>
+          </div>
+          <div class="panel" id="p-tests">
+            <div class="code-block">
+              <button class="copy-btn" type="button">Copy</button>
+              <pre><code>uv run pytest</code></pre>
+            </div>
+            <p class="prose soft" style="font-size:.9rem;">Five files, ~430 lines: the LP model
+            (<code>test_model.py</code>) plus one file per evals module &mdash;
+            <code>test_evals_cards.py</code>, <code>test_evals_numbers.py</code>,
+            <code>test_evals_scenario.py</code>, <code>test_evals_scoring.py</code>.</p>
+          </div>
+          <div class="panel" id="p-evalsrun">
+            <div class="code-block">
+              <button class="copy-btn" type="button">Copy</button>
+              <pre><code># paste as-is into a gitignored .env, or run each line in your shell
+export LLM_GATEWAY_BASE_URL=...   # company OpenAI-compatible gateway
+export LLM_GATEWAY_API_KEY=...
+export LLM_MODEL=...              # model name your gateway routes
+export LANGSMITH_API_KEY=...
+export EVAL_SIM_MODEL=...   # optional: simulated-user model, defaults to LLM_MODEL
+
+uv run copilot-evals --runs 3</code></pre>
+            </div>
+            <p class="prose soft" style="font-size:.9rem;">Needs the same gateway vars as the chat
+            REPL, plus <code>LANGSMITH_API_KEY</code>. <code>--runs</code> sets repetitions per
+            Scenario (default 3). Fact Cards sync from <code>copilot/evals/cards/</code> up to a
+            LangSmith dataset on every invocation &mdash; the repo is always the master copy.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="evals">
+      <p class="eyebrow">ADR-0004</p>
+      <h2>Agentic evals: LLMs converse, code scores</h2>
+      <p class="prose">
+        The suite runs full conversations &mdash; a Simulated User improvising from a Fact Card
+        against the real chat loop &mdash; but no LLM grades anything. Two dimensions only, both
+        scored by deterministic Python.
+      </p>
+      <div class="flow">
+        <div class="flow-step static">
+          <div class="flow-step-title"><span class="idx">01</span>Fact Card</div>
+          <p>A JSON file in <code>copilot/evals/cards/</code> &mdash; the ground truth. Its
+          <code>facts</code> prose is the only thing the Simulated User may say; its
+          <code>expected_args</code> is the exact <code>solve_plan</code> call the agent must
+          produce.</p>
+        </div>
+        <span class="flow-arrow" aria-hidden="true">&#8594;</span>
+        <div class="flow-step static">
+          <div class="flow-step-title"><span class="idx">02</span>Simulated User &#8596; chat loop</div>
+          <p>An LLM plays the user, improvising from the card. It talks to the same
+          <code>run_turn()</code> the terminal REPL uses &mdash; no eval-only code path on the
+          agent side.</p>
+        </div>
+        <span class="flow-arrow" aria-hidden="true">&#8594;</span>
+        <div class="flow-step static">
+          <div class="flow-step-title"><span class="idx">03</span>Capture</div>
+          <p>The harness records the first <code>solve_plan</code> call's arguments and result,
+          plus every message sent, up to a 12-turn cap. Reaching the cap with no solve is a
+          "no-solve" &mdash; charged to the agent, not the harness.</p>
+        </div>
+        <span class="flow-arrow" aria-hidden="true">&#8594;</span>
+        <div class="flow-step static">
+          <div class="flow-step-title"><span class="idx">04</span>Score</div>
+          <p>Two scorers grade the run: <strong>Profile Fidelity</strong> and
+          <strong>Number Faithfulness</strong>. Results land as a LangSmith experiment, tagged
+          to the git SHA and system-prompt hash.</p>
+        </div>
+      </div>
+
+      <div class="account-grid" style="margin-top:2rem;">
+        <div class="account-card">
+          <h3>Profile Fidelity</h3>
+          <p>Do the raw <code>solve_plan</code> arguments match the Fact Card exactly? Stated
+          fields must match verbatim; unstated optional fields must be strictly absent &mdash;
+          an agent that passes a default explicitly (e.g. <code>expected_return=0.05</code> when
+          the card never mentioned a return) fails, since it may have memorized the value rather
+          than sourced it.</p>
+        </div>
+        <div class="account-card">
+          <h3>Number Faithfulness</h3>
+          <p>Does every number in the agent's prose trace to an allowed source &mdash; the solve
+          result, the Fact Card, an age within the plan, or a taxdata default &mdash; exactly or
+          rounded to the digits shown? "$1.2M" matches 1,203,456; "$1.25M" doesn't. Derived
+          arithmetic (e.g. "$40k/year" computed from a $320k total) always fails.</p>
+        </div>
+      </div>
+      <div class="callout">
+        <strong>Voided Run.</strong> If the Simulated User states a number that isn't on its own
+        Fact Card, the run is discarded and retried (up to 2 extra attempts) &mdash; charged to
+        the sim side, never counted as an agent failure.
+      </div>
+
+      <h3 style="margin-top:2.5rem;">Fact Card explorer</h3>
+      <p class="prose soft" style="font-size:.9rem;">All six cards, grouped by family.</p>
+      <div class="tabs card-tabs">
+        <input type="radio" name="card-tabs" id="c-mcs" checked>
+        <input type="radio" name="card-tabs" id="c-mep">
+        <input type="radio" name="card-tabs" id="c-cro">
+        <input type="radio" name="card-tabs" id="c-heo">
+        <input type="radio" name="card-tabs" id="c-erb">
+        <input type="radio" name="card-tabs" id="c-ros">
+        <div class="tab-labels">
+          <label for="c-mcs">mid-career-single<span class="pill trad fam">happy_path</span></label>
+          <label for="c-mep">married-early-planner<span class="pill trad fam">happy_path</span></label>
+          <label for="c-cro">cautious-return-override<span class="pill roth fam">stated_overrides</span></label>
+          <label for="c-heo">high-earner-overrides<span class="pill roth fam">stated_overrides</span></label>
+          <label for="c-erb">early-retiree-bridge-gap<span class="pill fail fam">infeasible_profile</span></label>
+          <label for="c-ros">retired-overspender<span class="pill fail fam">infeasible_profile</span></label>
+        </div>
+        <div class="tab-panels">
+
+          <div class="panel" id="cp-mcs">
+            <div class="card-panel">
+              <div class="facts">
+                <p><strong>Goal:</strong> maximize terminal wealth, planning to age 90.</p>
+                <ul>
+                  <li>Age 40, single filer, retiring at 65.</li>
+                  <li>Gross income $150,000/yr; can save $30,000/yr.</li>
+                  <li>Will spend $80,000/yr in retirement.</li>
+                  <li>Balances: $200,000 traditional, $50,000 Roth, $100,000 taxable.</li>
+                  <li>Social Security: $30,000/yr starting at 67. No pension.</li>
+                  <li>No employer match; defaults fine for everything else.</li>
+                </ul>
+              </div>
+              <table class="args-table">
+                <tr><th>expected_args</th><th></th></tr>
+                <tr><td class="k">current_age</td><td class="v">40</td></tr>
+                <tr><td class="k">retirement_age</td><td class="v">65</td></tr>
+                <tr><td class="k">horizon_age</td><td class="v">90</td></tr>
+                <tr><td class="k">filing_status</td><td class="v">single</td></tr>
+                <tr><td class="k">gross_income</td><td class="v">150,000</td></tr>
+                <tr><td class="k">savings_capacity</td><td class="v">30,000</td></tr>
+                <tr><td class="k">spending_need</td><td class="v">80,000</td></tr>
+                <tr><td class="k">balance_traditional</td><td class="v">200,000</td></tr>
+                <tr><td class="k">balance_roth</td><td class="v">50,000</td></tr>
+                <tr><td class="k">balance_taxable</td><td class="v">100,000</td></tr>
+                <tr><td class="k">income_streams</td><td class="v">SS $30,000 @67</td></tr>
+                <tr><td class="k">objective</td><td class="v">terminal_wealth</td></tr>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel" id="cp-mep">
+            <div class="card-panel">
+              <div class="facts">
+                <p><strong>Goal:</strong> maximize wealth at retirement, planning to age 92.</p>
+                <ul>
+                  <li>Age 35, married filing jointly (pooled with spouse), retiring at 67.</li>
+                  <li>Combined gross income $190,000/yr; can save $25,000/yr.</li>
+                  <li>Will spend $90,000/yr in retirement.</li>
+                  <li>Balances: $150,000 traditional, $40,000 Roth, $60,000 taxable.</li>
+                  <li>No Social Security, no pension, no employer match.</li>
+                  <li>Defaults fine for everything else.</li>
+                </ul>
+              </div>
+              <table class="args-table">
+                <tr><th>expected_args</th><th></th></tr>
+                <tr><td class="k">current_age</td><td class="v">35</td></tr>
+                <tr><td class="k">retirement_age</td><td class="v">67</td></tr>
+                <tr><td class="k">horizon_age</td><td class="v">92</td></tr>
+                <tr><td class="k">filing_status</td><td class="v">married_filing_jointly</td></tr>
+                <tr><td class="k">gross_income</td><td class="v">190,000</td></tr>
+                <tr><td class="k">savings_capacity</td><td class="v">25,000</td></tr>
+                <tr><td class="k">spending_need</td><td class="v">90,000</td></tr>
+                <tr><td class="k">balance_traditional</td><td class="v">150,000</td></tr>
+                <tr><td class="k">balance_roth</td><td class="v">40,000</td></tr>
+                <tr><td class="k">balance_taxable</td><td class="v">60,000</td></tr>
+                <tr><td class="k">objective</td><td class="v">wealth_at_retirement</td></tr>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel" id="cp-cro">
+            <div class="card-panel">
+              <div class="facts">
+                <p><strong>Goal:</strong> maximize terminal wealth, planning to age 95.</p>
+                <ul>
+                  <li>Age 45, single filer, retiring at 65.</li>
+                  <li>Gross income $120,000/yr; can save $20,000/yr.</li>
+                  <li>Will spend $70,000/yr in retirement.</li>
+                  <li>Balances: $300,000 traditional, $0 Roth, $150,000 taxable.</li>
+                  <li>Social Security: $28,000/yr starting at 68.</li>
+                  <li>Wants a conservative <strong>4% expected real return</strong> instead of
+                  the 5% default.</li>
+                </ul>
+              </div>
+              <table class="args-table">
+                <tr><th>expected_args</th><th></th></tr>
+                <tr><td class="k">current_age</td><td class="v">45</td></tr>
+                <tr><td class="k">retirement_age</td><td class="v">65</td></tr>
+                <tr><td class="k">horizon_age</td><td class="v">95</td></tr>
+                <tr><td class="k">filing_status</td><td class="v">single</td></tr>
+                <tr><td class="k">gross_income</td><td class="v">120,000</td></tr>
+                <tr><td class="k">savings_capacity</td><td class="v">20,000</td></tr>
+                <tr><td class="k">spending_need</td><td class="v">70,000</td></tr>
+                <tr><td class="k">balance_traditional</td><td class="v">300,000</td></tr>
+                <tr><td class="k">balance_roth</td><td class="v">0</td></tr>
+                <tr><td class="k">balance_taxable</td><td class="v">150,000</td></tr>
+                <tr><td class="k">income_streams</td><td class="v">SS $28,000 @68</td></tr>
+                <tr><td class="k">expected_return</td><td class="v">0.04</td></tr>
+                <tr><td class="k">objective</td><td class="v">terminal_wealth</td></tr>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel" id="cp-heo">
+            <div class="card-panel">
+              <div class="facts">
+                <p><strong>Goal:</strong> maximize terminal wealth, planning to age 90.</p>
+                <ul>
+                  <li>Age 55, married filing jointly, retiring at 65.</li>
+                  <li>Combined gross income $400,000/yr; can save $60,000/yr.</li>
+                  <li>Will spend $120,000/yr in retirement.</li>
+                  <li>Balances: $900,000 traditional, $200,000 Roth, $500,000 taxable.</li>
+                  <li>Employer match $10,000/yr. SS $40,000 @70; pension $20,000 @65.</li>
+                  <li>Catch-up: $31,000 combined limit. 20% capital gains rate.</li>
+                </ul>
+              </div>
+              <table class="args-table">
+                <tr><th>expected_args</th><th></th></tr>
+                <tr><td class="k">current_age</td><td class="v">55</td></tr>
+                <tr><td class="k">retirement_age</td><td class="v">65</td></tr>
+                <tr><td class="k">horizon_age</td><td class="v">90</td></tr>
+                <tr><td class="k">filing_status</td><td class="v">married_filing_jointly</td></tr>
+                <tr><td class="k">gross_income</td><td class="v">400,000</td></tr>
+                <tr><td class="k">savings_capacity</td><td class="v">60,000</td></tr>
+                <tr><td class="k">spending_need</td><td class="v">120,000</td></tr>
+                <tr><td class="k">balance_traditional</td><td class="v">900,000</td></tr>
+                <tr><td class="k">balance_roth</td><td class="v">200,000</td></tr>
+                <tr><td class="k">balance_taxable</td><td class="v">500,000</td></tr>
+                <tr><td class="k">income_streams</td><td class="v">SS $40,000 @70; pension $20,000 @65</td></tr>
+                <tr><td class="k">employer_match</td><td class="v">10,000</td></tr>
+                <tr><td class="k">capital_gains_rate</td><td class="v">0.20</td></tr>
+                <tr><td class="k">contribution_limit</td><td class="v">31,000</td></tr>
+                <tr><td class="k">objective</td><td class="v">terminal_wealth</td></tr>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel" id="cp-erb">
+            <div class="card-panel">
+              <div class="facts">
+                <p><strong>Goal:</strong> maximize terminal wealth, planning to age 85.
+                <span class="pill fail">infeasible</span></p>
+                <ul>
+                  <li>Age 45, single filer, wants to retire at 50.</li>
+                  <li>Gross income $100,000/yr; can save $10,000/yr.</li>
+                  <li>Will spend $70,000/yr in retirement.</li>
+                  <li>Balances: $800,000 traditional, $200,000 Roth, only $50,000 taxable.</li>
+                  <li>No Social Security, no pension, no employer match.</li>
+                </ul>
+                <p style="margin-top:.6rem;font-size:.82rem;">Retires at 50 &mdash; ten years
+                before accounts unlock at 60. $50,000 taxable can't bridge that gap.</p>
+              </div>
+              <table class="args-table">
+                <tr><th>expected_args</th><th></th></tr>
+                <tr><td class="k">current_age</td><td class="v">45</td></tr>
+                <tr><td class="k">retirement_age</td><td class="v">50</td></tr>
+                <tr><td class="k">horizon_age</td><td class="v">85</td></tr>
+                <tr><td class="k">filing_status</td><td class="v">single</td></tr>
+                <tr><td class="k">gross_income</td><td class="v">100,000</td></tr>
+                <tr><td class="k">savings_capacity</td><td class="v">10,000</td></tr>
+                <tr><td class="k">spending_need</td><td class="v">70,000</td></tr>
+                <tr><td class="k">balance_traditional</td><td class="v">800,000</td></tr>
+                <tr><td class="k">balance_roth</td><td class="v">200,000</td></tr>
+                <tr><td class="k">balance_taxable</td><td class="v">50,000</td></tr>
+                <tr><td class="k">objective</td><td class="v">terminal_wealth</td></tr>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel" id="cp-ros">
+            <div class="card-panel">
+              <div class="facts">
+                <p><strong>Goal:</strong> maximize terminal wealth, planning to age 90.
+                <span class="pill fail">infeasible</span></p>
+                <ul>
+                  <li>Age 60, single filer, retired this year.</li>
+                  <li>No more work income and nothing more to save: $0 / $0.</li>
+                  <li>Wants to spend $200,000/yr in retirement.</li>
+                  <li>Balances: $100,000 traditional, $50,000 Roth, $50,000 taxable.</li>
+                  <li>No Social Security, no pension, no employer match.</li>
+                </ul>
+                <p style="margin-top:.6rem;font-size:.82rem;">$200,000/yr spending against
+                $200,000 total balances &mdash; can't sustain to age 90.</p>
+              </div>
+              <table class="args-table">
+                <tr><th>expected_args</th><th></th></tr>
+                <tr><td class="k">current_age</td><td class="v">60</td></tr>
+                <tr><td class="k">retirement_age</td><td class="v">60</td></tr>
+                <tr><td class="k">horizon_age</td><td class="v">90</td></tr>
+                <tr><td class="k">filing_status</td><td class="v">single</td></tr>
+                <tr><td class="k">gross_income</td><td class="v">0</td></tr>
+                <tr><td class="k">savings_capacity</td><td class="v">0</td></tr>
+                <tr><td class="k">spending_need</td><td class="v">200,000</td></tr>
+                <tr><td class="k">balance_traditional</td><td class="v">100,000</td></tr>
+                <tr><td class="k">balance_roth</td><td class="v">50,000</td></tr>
+                <tr><td class="k">balance_taxable</td><td class="v">50,000</td></tr>
+                <tr><td class="k">objective</td><td class="v">terminal_wealth</td></tr>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <section id="decisions">
+      <p class="eyebrow">docs/adr/</p>
+      <h2>Design decisions</h2>
+      <p class="prose">Four ADRs; each one constrains what the others are allowed to assume.</p>
+
+      <details class="adr" open>
+        <summary><span class="num">0001</span><span class="title">Convex tax model, pure LP</span></summary>
+        <div class="body">
+          <p>US bracket schedules are convex piecewise-linear (marginal rates only increase), and
+          tax always hurts the objective &mdash; so brackets can be modeled with segment
+          variables and no binaries. The tax model commits to staying convex: filing status +
+          standard deduction + progressive federal brackets, flat capital-gains rate on Taxable,
+          no state tax.</p>
+          <ul>
+            <li>Anything that breaks convexity &mdash; Social Security benefit taxation phase-in,
+            capital-gains bracket stacking, IRMAA cliffs, AMT &mdash; is out of scope until this
+            is consciously revisited.</li>
+            <li>Adding one of those later means migrating LP &#8594; MILP, a formulation change,
+            not just a feature.</li>
+            <li>Everything is in real (today's) dollars; no inflation parameter exists.</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="adr">
+        <summary><span class="num">0002</span><span class="title">LLM translates, solver decides</span></summary>
+        <div class="body">
+          <p>Every financial number originates in solver output; the LLM never computes,
+          estimates, or extrapolates a figure. <strong>Amended 2026-07-09:</strong> the LLM may
+          now round a solver figure to displayed significant digits for readable narration &mdash;
+          computing, estimating, and extrapolating remain forbidden.</p>
+          <ul>
+            <li>The formulation is testable in isolation (golden profiles &#8594; expected plans),
+            independent of any LLM behavior.</li>
+            <li>New capabilities require changing the formulation code &mdash; chat can't "unlock"
+            behavior the LP doesn't have.</li>
+            <li>What-ifs are Profile mutation + re-solve, never LLM extrapolation.</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="adr">
+        <summary><span class="num">0003</span><span class="title">LLM via an OpenAI-compatible client</span></summary>
+        <div class="body">
+          <p>All LLM calls use the standard <code>openai</code> package pointed at a configurable
+          <code>base_url</code> &mdash; never a provider SDK, since none is available in
+          production. The same client code targets either the company gateway or a local Ollama
+          instance; <code>wrap_openai</code> plus <code>@traceable</code> on the solver give one
+          LangSmith trace tree per conversation.</p>
+          <ul>
+            <li>Model choice is configuration, not code &mdash; whatever the target routes.</li>
+            <li>No Anthropic-specific features (extended thinking, prompt caching controls) can
+            be relied on.</li>
+            <li>If tool-calling passthrough ever breaks, the documented fallback is
+            structured-output prompting &mdash; the ADR-0002 boundary survives, only the wire
+            format changes.</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="adr">
+        <summary><span class="num">0004</span><span class="title">Agentic evals: LLMs converse, code scores</span></summary>
+        <div class="body">
+          <p>Full conversations, deterministic scoring: LLM-as-judge was considered and rejected
+          for v1 &mdash; both Profile Fidelity and Number Faithfulness are mechanically checkable,
+          and a judge would reintroduce the nondeterminism the suite exists to control for.</p>
+          <ul>
+            <li>Every Fact Card must uniquely determine correct agent behavior; cards needing
+            interpretation (adversarial phrasing, mid-conversation corrections) are held out of
+            v1 on purpose.</li>
+            <li>A fidelity or faithfulness failure is an agent failure by construction &mdash;
+            sim-side faults are voided, no-solves are charged to the agent. No transcript needs a
+            human read before a score is believed.</li>
+          </ul>
+        </div>
+      </details>
+    </section>
+
+    <footer class="end">
+      Domain language lives in <span class="mono">CONTEXT.md</span> &middot;
+      full decision history in <span class="mono">docs/adr/</span>
+    </footer>
+  </main>
+</div>
+
+<script>
+  document.querySelectorAll('.copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var block = btn.closest('.code-block');
+      var code = block.querySelector('code').textContent;
+      var original = btn.textContent;
+      function flash(label) {
+        btn.textContent = label;
+        setTimeout(function () { btn.textContent = original; }, 1400);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).then(function () { flash('Copied'); }, function () { flash('Select & copy'); });
+      } else {
+        flash('Select & copy');
+      }
+    });
+  });
+
+  var sections = Array.prototype.slice.call(document.querySelectorAll('main section[id]'));
+  var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+  if ('IntersectionObserver' in window && sections.length && links.length) {
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        links.forEach(function (l) { l.classList.remove('current'); });
+        var match = links.find(function (l) { return l.getAttribute('href') === '#' + entry.target.id; });
+        if (match) match.classList.add('current');
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function (s) { observer.observe(s); });
+  }
+</script>
+</body>
+</html>

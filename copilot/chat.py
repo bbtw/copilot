@@ -5,15 +5,16 @@ traced in LangSmith via wrap_openai; solver runs are traced via @traceable.
 """
 
 import json
-import os
 import sys
 
 from langsmith.wrappers import wrap_openai
 from openai import OpenAI
+from pydantic import ValidationError
 
 from .model import ModelTooLargeError, solve
 from .plan import Infeasible, Objective, render_table, to_summary
 from .profile import IncomeKind, IncomeStream, Profile
+from .settings import Settings, sync_langsmith_env
 from .taxdata import FilingStatus
 
 SYSTEM_PROMPT = """\
@@ -149,13 +150,10 @@ def _run_tool_call(arguments: str) -> str:
     return json.dumps(to_summary(result))
 
 
-def gateway_client() -> OpenAI:
+def gateway_client(settings: Settings) -> OpenAI:
     """OpenAI client for the company gateway (ADR-0003), traced via wrap_openai."""
     return wrap_openai(
-        OpenAI(
-            base_url=os.environ["LLM_GATEWAY_BASE_URL"],
-            api_key=os.environ["LLM_GATEWAY_API_KEY"],
-        )
+        OpenAI(base_url=settings.llm_gateway_base_url, api_key=settings.llm_gateway_api_key)
     )
 
 
@@ -193,15 +191,16 @@ def run_turn(client: OpenAI, model: str, messages: list[dict]) -> str:
 
 
 def main() -> None:
-    base_url = os.environ.get("LLM_GATEWAY_BASE_URL")
-    api_key = os.environ.get("LLM_GATEWAY_API_KEY")
-    model = os.environ.get("LLM_MODEL")
-    if not (base_url and api_key and model):
+    try:
+        settings = Settings()
+    except ValidationError:
         sys.exit(
             "Set LLM_GATEWAY_BASE_URL, LLM_GATEWAY_API_KEY, and LLM_MODEL "
-            "(and optionally LANGSMITH_TRACING/LANGSMITH_API_KEY for tracing)."
+            "(and optionally LANGSMITH_TRACING/LANGSMITH_API_KEY for tracing), "
+            "in your shell or a .env file."
         )
-    client = gateway_client()
+    sync_langsmith_env(settings)
+    client = gateway_client(settings)
     messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
     print("Retirement planning optimizer — describe your situation ('quit' to exit).")
     while True:
@@ -215,7 +214,7 @@ def main() -> None:
             break
         messages.append({"role": "user", "content": user_input})
         try:
-            reply = run_turn(client, model, messages)
+            reply = run_turn(client, settings.llm_model, messages)
         except Exception as exc:  # gateway/network failure: report and keep the REPL alive
             print(f"[gateway error: {exc}]")
             continue

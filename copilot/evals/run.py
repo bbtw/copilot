@@ -7,7 +7,6 @@ is retried and reported separately; it never counts against the agent.
 
 import argparse
 import hashlib
-import os
 import subprocess
 import sys
 from dataclasses import asdict
@@ -15,8 +14,10 @@ from dataclasses import asdict
 from langsmith import Client
 from langsmith.evaluation import evaluate
 from langsmith.schemas import Example, Run
+from pydantic import ValidationError
 
 from ..chat import SYSTEM_PROMPT, gateway_client
+from ..settings import Settings, sync_langsmith_env
 from .cards import FactCard, load_cards
 from .scenario import TURN_CAP, run_scenario
 from .scoring import audit_sim, faithfulness_sources, number_faithfulness, profile_fidelity
@@ -90,19 +91,21 @@ def main() -> None:
     parser.add_argument("--runs", type=int, default=3, help="runs per Scenario (default 3)")
     args = parser.parse_args()
 
-    agent_model = os.environ.get("LLM_MODEL")
-    if not (
-        os.environ.get("LLM_GATEWAY_BASE_URL")
-        and os.environ.get("LLM_GATEWAY_API_KEY")
-        and agent_model
-    ):
+    try:
+        settings = Settings()
+    except ValidationError:
         sys.exit(
             "Set LLM_GATEWAY_BASE_URL, LLM_GATEWAY_API_KEY, and LLM_MODEL "
-            "(plus LANGSMITH_API_KEY; EVAL_SIM_MODEL optionally overrides the sim model)."
+            "(plus LANGSMITH_API_KEY; EVAL_SIM_MODEL optionally overrides the sim model), "
+            "in your shell or a .env file."
         )
-    sim_model = os.environ.get("EVAL_SIM_MODEL", agent_model)
-    agent_client = gateway_client()
-    sim_client = gateway_client()
+    if not settings.langsmith_api_key:
+        sys.exit("Set LANGSMITH_API_KEY to run evals.")
+    sync_langsmith_env(settings)
+    agent_model = settings.llm_model
+    sim_model = settings.eval_sim_model or agent_model
+    agent_client = gateway_client(settings)
+    sim_client = gateway_client(settings)
 
     cards = load_cards()
     ls_client = Client()
