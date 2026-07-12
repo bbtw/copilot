@@ -1,10 +1,7 @@
 import json
 from types import SimpleNamespace
 
-import pytest
-
 from copilot.agent import TurnResult, run_turn
-from copilot.plan import render_table
 
 ARGS = {
     "current_age": 40,
@@ -51,17 +48,13 @@ def _run(arguments: str) -> tuple[TurnResult, list[dict]]:
     return run_turn(client, "model", messages), messages
 
 
-def test_feasible_solve_records_args_result_and_plan(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_feasible_solve_records_args_result_and_plan() -> None:
     turn, messages = _run(json.dumps(ARGS))
     assert turn.reply == "Narration."
     (call,) = turn.solves
     assert call.args == ARGS
     assert call.result["objective_value_after_tax"] > 0
     assert call.plan is not None and len(call.plan.rows) == 50
-    # rendering belongs to the REPL, not the Agent (Gurobi may print a license banner)
-    assert render_table(call.plan) not in capsys.readouterr().out
     tool_entries = [m for m in messages if m["role"] == "tool"]
     assert json.loads(tool_entries[0]["content"]) == call.result
 

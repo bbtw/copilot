@@ -381,9 +381,10 @@
         <span class="flow-arrow" aria-hidden="true">&#8594;</span>
         <details class="flow-step">
           <summary><span><span class="idx">04</span>LLM narrates the Plan</span></summary>
-          <p>The full year-by-year table prints straight to your terminal; the LLM only receives
-          a compact summary and narrates <em>that</em>. Every number in its reply must trace back
-          to the summary — rounded for readability, never computed or derived.</p>
+          <p>The full year-by-year table and a balance chart render in the app's Plan panel; the
+          LLM only receives a compact summary and narrates <em>that</em>. Every number in its
+          reply must trace back to the summary — rounded for readability, never computed or
+          derived.</p>
         </details>
       </div>
       <div class="callout">
@@ -474,14 +475,16 @@
           schema, and <code>run_turn()</code> &mdash; the loop that calls the model, executes any
           tool calls, and repeats until the assistant replies in plain text. Each turn returns a
           <code>TurnResult</code> recording every solve (raw arguments, result dict, and the
-          solved <code>Plan</code>), so the REPL and the eval harness read what happened instead
+          solved <code>Plan</code>), so the web UI and the eval harness read what happened instead
           of re-parsing the transcript.</div>
         </details>
         <details>
-          <summary><span class="path">chat.py</span><span class="gist">Terminal REPL &mdash; one frontend to the Agent</span></summary>
-          <div class="detail"><code>copilot</code>'s <code>main()</code>: the input loop.
-          Renders each solved Plan's year-by-year table, then prints the Agent's
-          narration.</div>
+          <summary><span class="path">web.py</span><span class="gist">Local web UI &mdash; one frontend to the Agent</span></summary>
+          <div class="detail"><code>copilot</code>'s <code>main()</code>: a FastAPI server on
+          127.0.0.1 serving <code>static/index.html</code> plus JSON endpoints around
+          <code>run_turn()</code>. The page is a chat transcript beside a Plan panel that keeps
+          every solve of the session as tabs &mdash; year-by-year table and balance chart
+          each.</div>
         </details>
         <details>
           <summary><span class="path">model.py</span><span class="gist">The Gurobi LP &mdash; builds and solves fresh on every call</span></summary>
@@ -494,9 +497,9 @@
         <details>
           <summary><span class="path">plan.py</span><span class="gist">The Plan &mdash; the solver's output, and the only source of numbers</span></summary>
           <div class="detail"><code>Plan</code> / <code>YearRow</code> / <code>Infeasible</code>
-          dataclasses, plus two renderers: <code>render_table()</code> (the full fixed-width
-          year-by-year table, printed straight to the terminal) and <code>to_summary()</code>
-          (the compact dict handed to the LLM &mdash; the only thing it's allowed to narrate).</div>
+          dataclasses, plus <code>to_summary()</code> (the compact dict handed to the LLM &mdash;
+          the only thing it's allowed to narrate). The full year-by-year table is rendered
+          client-side by the web UI.</div>
         </details>
         <details>
           <summary><span class="path">profile.py</span><span class="gist">The Profile &mdash; typed inputs the solver needs</span></summary>
@@ -567,7 +570,7 @@
         <input type="radio" name="run-tabs" id="t-tests">
         <input type="radio" name="run-tabs" id="t-evalsrun">
         <div class="tab-labels">
-          <label for="t-repl">Chat REPL</label>
+          <label for="t-repl">Web UI</label>
           <label for="t-tests">Tests</label>
           <label for="t-evalsrun">Evals</label>
         </div>
@@ -584,7 +587,8 @@ export LANGSMITH_API_KEY=...
 
 uv run copilot</code></pre>
             </div>
-            <p class="prose soft" style="font-size:.9rem;">Gurobi runs on the free pip license
+            <p class="prose soft" style="font-size:.9rem;">Starts a local server on
+            127.0.0.1:8765 and opens your browser. Gurobi runs on the free pip license
             (no license file needed); the model is sized to stay under its 2,000-variable /
             2,000-constraint limit.</p>
           </div>
@@ -593,8 +597,9 @@ uv run copilot</code></pre>
               <button class="copy-btn" type="button">Copy</button>
               <pre><code>uv run pytest</code></pre>
             </div>
-            <p class="prose soft" style="font-size:.9rem;">Five files, ~430 lines: the LP model
-            (<code>test_model.py</code>) plus one file per evals module &mdash;
+            <p class="prose soft" style="font-size:.9rem;">The LP model
+            (<code>test_model.py</code>), the Agent turn loop (<code>test_agent.py</code>), the
+            web endpoints (<code>test_web.py</code>), plus one file per evals module &mdash;
             <code>test_evals_cards.py</code>, <code>test_evals_numbers.py</code>,
             <code>test_evals_scenario.py</code>, <code>test_evals_scoring.py</code>.</p>
           </div>
@@ -610,8 +615,8 @@ export EVAL_SIM_MODEL=...   # optional: simulated-user model, defaults to LLM_MO
 
 uv run copilot-evals --runs 3</code></pre>
             </div>
-            <p class="prose soft" style="font-size:.9rem;">Needs the same gateway vars as the chat
-            REPL, plus <code>LANGSMITH_API_KEY</code>. <code>--runs</code> sets repetitions per
+            <p class="prose soft" style="font-size:.9rem;">Needs the same gateway vars as the web
+            UI, plus <code>LANGSMITH_API_KEY</code>. <code>--runs</code> sets repetitions per
             Scenario (default 3). Fact Cards sync from <code>copilot/evals/cards/</code> up to a
             LangSmith dataset on every invocation &mdash; the repo is always the master copy.</p>
           </div>
@@ -639,7 +644,7 @@ uv run copilot-evals --runs 3</code></pre>
         <div class="flow-step static">
           <div class="flow-step-title"><span class="idx">02</span>Simulated User &#8596; chat loop</div>
           <p>An LLM plays the user, improvising from the card. It talks to the same
-          <code>run_turn()</code> the terminal REPL uses &mdash; no eval-only code path on the
+          <code>run_turn()</code> the web UI uses &mdash; no eval-only code path on the
           agent side.</p>
         </div>
         <span class="flow-arrow" aria-hidden="true">&#8594;</span>

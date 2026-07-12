@@ -40,38 +40,6 @@ class Infeasible:
     reason: str
 
 
-def _k(value: float) -> str:
-    return f"{value / 1000:,.0f}"
-
-
-def render_table(plan: Plan) -> str:
-    """Fixed-width year-by-year table for the terminal, amounts in $1,000s."""
-    title = (
-        f"Optimal plan — {plan.objective.value.replace('_', ' ')}: "
-        f"${plan.objective_value:,.0f} after tax (today's dollars)"
-    )
-    header = (
-        f"{'Age':>3} | {'cTrad':>7} {'cRoth':>7} {'cTaxb':>7} | {'Conv':>7} | "
-        f"{'wTrad':>7} {'wRoth':>7} {'wTaxb':>7} | {'Tax':>7} | "
-        f"{'BTrad':>8} {'BRoth':>8} {'BTaxb':>8}"
-    )
-    lines = [title, "(amounts in $1,000s)", header, "-" * len(header)]
-    previous_phase = None
-    for r in plan.rows:
-        if previous_phase == "accumulation" and r.phase == "decumulation":
-            lines.append(f"{'---':>3} | {'retirement starts':-^{len(header) - 6}}")
-        previous_phase = r.phase
-        lines.append(
-            f"{r.age:>3} | {_k(r.contrib_traditional):>7} {_k(r.contrib_roth):>7} "
-            f"{_k(r.contrib_taxable):>7} | {_k(r.conversion):>7} | "
-            f"{_k(r.withdraw_traditional):>7} {_k(r.withdraw_roth):>7} "
-            f"{_k(r.withdraw_taxable):>7} | {_k(r.tax):>7} | "
-            f"{_k(r.balance_traditional):>8} {_k(r.balance_roth):>8} "
-            f"{_k(r.balance_taxable):>8}"
-        )
-    return "\n".join(lines)
-
-
 def to_summary(plan: Plan) -> dict:
     """Compact dict handed to the LLM as the tool result (ADR-0002: it narrates only this)."""
     accumulation = [r for r in plan.rows if r.phase == "accumulation"]

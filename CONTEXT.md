@@ -88,7 +88,7 @@ Progressive federal ordinary-income brackets (with filing status and standard de
 _Avoid_: Effective rate, flat rate (a flat ordinary-income rate collapses the optimization to a corner solution)
 
 **Agent**:
-The chat side of the system — the system prompt, the solve_plan tool, and the turn loop that drives them. The terminal REPL and the eval Scenario are its two frontends; it is the thing Profile Fidelity and Number Faithfulness score.
+The chat side of the system — the system prompt, the solve_plan tool, and the turn loop that drives them. The local web UI and the eval Scenario are its two frontends; it is the thing Profile Fidelity and Number Faithfulness score.
 _Avoid_: Bot, chatbot; assistant (the prompt's word for how the Agent speaks, not a system component)
 
 ### Evaluation

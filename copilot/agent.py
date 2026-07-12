@@ -1,5 +1,5 @@
 """The Agent: the system prompt, the solve_plan tool, and the turn loop that
-drives them (ADR-0002, CONTEXT.md). The terminal REPL (`.chat`) and the eval
+drives them (ADR-0002, CONTEXT.md). The web UI (`.web`) and the eval
 Scenario (`.evals.scenario`) are its two frontends: each turn returns a
 TurnResult recording every solve_plan execution, so presentation and scoring
 live with the frontends, not here.
@@ -30,8 +30,8 @@ How a session works:
    traditional+Roth contribution limit).
 2. Ask which objective to maximize: wealth at retirement, or wealth at the end
    of the plan (terminal wealth). Both are measured after tax.
-3. Call solve_plan. The full year-by-year table is printed directly to the
-   user's terminal by the application — do not reproduce it. You receive a
+3. Call solve_plan. The full year-by-year table is shown directly to the
+   user by the application — do not reproduce it. You receive a
    summary; narrate the strategy it shows and cite only its numbers.
 4. Treat "what if" questions as: adjust the inputs, call solve_plan again,
    compare the summaries.
