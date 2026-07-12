@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Retirement Planning Optimizer</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #1f2430; background: #f4f5f7; display: flex;
+  }
+  #chat {
+    flex: 0 0 44%; min-width: 380px; display: flex; flex-direction: column;
+    border-right: 1px solid #dde0e5; background: #fff;
+  }
+  #chat header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; border-bottom: 1px solid #dde0e5;
+  }
+  #chat header h1 { font-size: 16px; font-weight: 600; }
+  #reset {
+    font: inherit; font-size: 13px; padding: 5px 10px; cursor: pointer;
+    border: 1px solid #c7ccd4; border-radius: 6px; background: #fff; color: #444;
+  }
+  #reset:hover { background: #f0f1f3; }
+  #messages { flex: 1; overflow-y: auto; padding: 16px; }
+  .bubble {
+    max-width: 85%; padding: 9px 13px; border-radius: 12px; margin-bottom: 10px;
+    white-space: pre-wrap; overflow-wrap: break-word;
+  }
+  .bubble.user { margin-left: auto; background: #2b5fd9; color: #fff; border-bottom-right-radius: 4px; }
+  .bubble.assistant { background: #eef0f3; border-bottom-left-radius: 4px; }
+  .bubble.error { background: #fbeaea; color: #8a2020; border: 1px solid #eac6c6; }
+  .bubble.typing { background: #eef0f3; width: 60px; }
+  .typing span {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: #9aa2ad; margin-right: 4px; animation: blink 1.2s infinite;
+  }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+  #composer { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid #dde0e5; }
+  #input {
+    flex: 1; font: inherit; padding: 9px 12px; border: 1px solid #c7ccd4;
+    border-radius: 8px; outline: none;
+  }
+  #input:focus { border-color: #2b5fd9; }
+  #send {
+    font: inherit; padding: 9px 16px; border: none; border-radius: 8px;
+    background: #2b5fd9; color: #fff; cursor: pointer;
+  }
+  #send:disabled, #input:disabled { opacity: 0.55; cursor: default; }
+  #panel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #tabs { display: flex; gap: 6px; padding: 12px 16px 0; flex-wrap: wrap; }
+  #tabs button {
+    font: inherit; font-size: 13px; padding: 6px 14px; cursor: pointer;
+    border: 1px solid #c7ccd4; border-bottom: none; border-radius: 8px 8px 0 0;
+    background: #e9ebee; color: #555;
+  }
+  #tabs button.active { background: #fff; color: #1f2430; font-weight: 600; }
+  #plan {
+    flex: 1; overflow-y: auto; margin: 0 16px 16px; padding: 16px;
+    background: #fff; border: 1px solid #dde0e5; border-radius: 0 8px 8px 8px;
+  }
+  #plan .placeholder { color: #8a919c; padding: 24px 8px; }
+  #plan h2 { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+  #plan .units { color: #8a919c; font-size: 13px; margin-bottom: 12px; }
+  #chart-box { height: 260px; margin-bottom: 16px; }
+  .table-box { overflow-x: auto; }
+  table { border-collapse: collapse; font-size: 12.5px; white-space: nowrap; }
+  th, td { padding: 3px 9px; text-align: right; }
+  thead th { border-bottom: 1px solid #c7ccd4; font-weight: 600; }
+  thead tr.groups th { border-bottom: none; padding-bottom: 0; color: #666; }
+  tbody tr:nth-child(even) { background: #f7f8fa; }
+  td.divider {
+    text-align: center; color: #8a919c; font-style: italic; background: #eef0f3 !important;
+  }
+  .sep { border-left: 1px solid #e2e5e9; }
+</style>
+</head>
+<body>
+<section id="chat">
+  <header>
+    <h1>Retirement Planning Optimizer</h1>
+    <button id="reset">New conversation</button>
+  </header>
+  <div id="messages"></div>
+  <form id="composer">
+    <input id="input" autocomplete="off" placeholder="Describe your situation — ages, balances, income…">
+    <button id="send" type="submit">Send</button>
+  </form>
+</section>
+<section id="panel">
+  <div id="tabs"></div>
+  <div id="plan"><div class="placeholder">Plans appear here after the first solve.</div></div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+<script>
+"use strict";
+
+const messagesEl = document.getElementById("messages");
+const tabsEl = document.getElementById("tabs");
+const planEl = document.getElementById("plan");
+const form = document.getElementById("composer");
+const input = document.getElementById("input");
+const sendBtn = document.getElementById("send");
+
+const plans = [];
+let chart = null;
+
+function addBubble(kind, text) {
+  const div = document.createElement("div");
+  div.className = "bubble " + kind;
+  div.textContent = text;
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return div;
+}
+
+const k = (v) => (v / 1000).toLocaleString(undefined, { maximumFractionDigits: 0 });
+const dollars = (v) => "$" + Math.round(v).toLocaleString();
+
+function buildTable(plan) {
+  const box = document.createElement("div");
+  box.className = "table-box";
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const groups = document.createElement("tr");
+  groups.className = "groups";
+  for (const [label, span] of [["", 1], ["Contributions", 3], ["Conv.", 1],
+                               ["Withdrawals", 3], ["Tax", 1], ["Balances", 3]]) {
+    const th = document.createElement("th");
+    th.textContent = label;
+    th.colSpan = span;
+    if (span === 3 || label === "Conv." || label === "Tax") th.className = "sep";
+    groups.appendChild(th);
+  }
+  const cols = document.createElement("tr");
+  const headers = ["Age", "Trad", "Roth", "Taxable", "", "Trad", "Roth", "Taxable", "", "Trad", "Roth", "Taxable"];
+  headers.forEach((label, i) => {
+    const th = document.createElement("th");
+    th.textContent = label;
+    if ([1, 4, 5, 8, 9].includes(i)) th.className = "sep";
+    cols.appendChild(th);
+  });
+  thead.append(groups, cols);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  let previousPhase = null;
+  for (const r of plan.rows) {
+    if (previousPhase === "accumulation" && r.phase === "decumulation") {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 12;
+      td.className = "divider";
+      td.textContent = "— retirement starts —";
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    }
+    previousPhase = r.phase;
+    const cells = [r.age, k(r.contrib_traditional), k(r.contrib_roth), k(r.contrib_taxable),
+                   k(r.conversion), k(r.withdraw_traditional), k(r.withdraw_roth),
+                   k(r.withdraw_taxable), k(r.tax), k(r.balance_traditional),
+                   k(r.balance_roth), k(r.balance_taxable)];
+    const tr = document.createElement("tr");
+    cells.forEach((value, i) => {
+      const td = document.createElement("td");
+      td.textContent = value;
+      if ([1, 4, 5, 8, 9].includes(i)) td.className = "sep";
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  box.appendChild(table);
+  return box;
+}
+
+function buildChart(canvas, plan) {
+  const retirementIdx = plan.rows.findIndex((r) => r.phase === "decumulation");
+  const series = (label, key, color) => ({
+    label,
+    data: plan.rows.map((r) => r[key]),
+    borderColor: color,
+    backgroundColor: color,
+    pointRadius: 0,
+    borderWidth: 2,
+    tension: 0.2,
+  });
+  const retirementLine = {
+    id: "retirementLine",
+    afterDatasetsDraw(c) {
+      if (retirementIdx < 1) return;
+      const x = c.scales.x.getPixelForValue(retirementIdx);
+      const { top, bottom } = c.chartArea;
+      const ctx = c.ctx;
+      ctx.save();
+      ctx.strokeStyle = "#9aa2ad";
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(x, top);
+      ctx.lineTo(x, bottom);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#8a919c";
+      ctx.font = "11px sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText("retirement", x + 5, top + 12);
+      ctx.restore();
+    },
+  };
+  return new Chart(canvas, {
+    type: "line",
+    data: {
+      labels: plan.rows.map((r) => r.age),
+      datasets: [
+        series("Traditional", "balance_traditional", "#4e79a7"),
+        series("Roth", "balance_roth", "#59a14f"),
+        series("Taxable", "balance_taxable", "#e07b39"),
+      ],
+    },
+    options: {
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: { title: { display: true, text: "Age" } },
+        y: { ticks: { callback: (v) => "$" + k(v) + "k" } },
+      },
+      plugins: {
+        tooltip: { callbacks: { label: (c) => c.dataset.label + ": " + dollars(c.parsed.y) } },
+      },
+    },
+    plugins: [retirementLine],
+  });
+}
+
+function showPlan(i) {
+  [...tabsEl.children].forEach((tab, j) => tab.classList.toggle("active", i === j));
+  if (chart) { chart.destroy(); chart = null; }
+  const plan = plans[i];
+  planEl.replaceChildren();
+
+  const title = document.createElement("h2");
+  title.textContent = "Optimal plan — " + plan.objective.replace(/_/g, " ") + ": "
+    + dollars(plan.objective_value) + " after tax";
+  const units = document.createElement("div");
+  units.className = "units";
+  units.textContent = "Today's dollars; table amounts in $1,000s.";
+  const chartBox = document.createElement("div");
+  chartBox.id = "chart-box";
+  const canvas = document.createElement("canvas");
+  chartBox.appendChild(canvas);
+  planEl.append(title, units, chartBox, buildTable(plan));
+  chart = buildChart(canvas, plan);
+}
+
+function addPlan(plan) {
+  plans.push(plan);
+  const i = plans.length - 1;
+  const tab = document.createElement("button");
+  tab.textContent = "Plan " + (i + 1);
+  tab.addEventListener("click", () => showPlan(i));
+  tabsEl.appendChild(tab);
+  showPlan(i);
+}
+
+function handleEvent(ev) {
+  if (ev.type === "plan") addPlan(ev.plan);
+  else addBubble(ev.type, ev.text);
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = input.value.trim();
+  if (!text || input.disabled) return;
+  input.value = "";
+  input.disabled = sendBtn.disabled = true;
+  addBubble("user", text);
+  const typing = addBubble("typing", "");
+  typing.innerHTML = "<span></span><span></span><span></span>";
+  try {
+    const res = await fetch("/api/message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) throw new Error(res.status + " " + res.statusText);
+    (await res.json()).events.forEach(handleEvent);
+  } catch (err) {
+    addBubble("error", "request failed: " + err.message);
+  } finally {
+    typing.remove();
+    input.disabled = sendBtn.disabled = false;
+    input.focus();
+  }
+});
+
+document.getElementById("reset").addEventListener("click", async () => {
+  if (plans.length || messagesEl.children.length) {
+    if (!confirm("Start a new conversation? The current one is discarded.")) return;
+  }
+  await fetch("/api/reset", { method: "POST" });
+  messagesEl.replaceChildren();
+  tabsEl.replaceChildren();
+  plans.length = 0;
+  if (chart) { chart.destroy(); chart = null; }
+  planEl.replaceChildren();
+  const placeholder = document.createElement("div");
+  placeholder.className = "placeholder";
+  placeholder.textContent = "Plans appear here after the first solve.";
+  planEl.appendChild(placeholder);
+  input.focus();
+});
+
+fetch("/api/transcript")
+  .then((res) => res.json())
+  .then((events) => events.forEach(handleEvent))
+  .catch(() => {});
+input.focus();
+</script>
+</body>
+</html>
